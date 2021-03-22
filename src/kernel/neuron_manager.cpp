@@ -112,7 +112,6 @@ stype NeuronManager::create_neurons(
 
         if (kernel().space_manager.has_environment())
         {
-            // printf("check point %f, %f in the environment \n",x,y);
             if (not kernel().space_manager.env_contains(BPoint(x, y)))
             {
                 throw std::runtime_error(

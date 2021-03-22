@@ -208,6 +208,7 @@ def create_neurons(n=1, params=None, num_neurites=0, neurite_params=None,
 
     # check kwargs for its values
     authorized = {"rnd_pos", "neurite_names", "num_neurites"}
+
     for k in kwargs:
         if k not in authorized:
             # turn off filter temporarily

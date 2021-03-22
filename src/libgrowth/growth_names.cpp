@@ -64,7 +64,6 @@ const std::string branching_proba_default("branching_proba_default");
 
 const std::string critical_pull("critical_pull");
 
-const std::string memory_decay_factor("memory_decay_factor");
 const std::string dendrite_angles("dendrite_angles");
 const std::string description("description");
 const std::string diameter_eta_exp("diameter_eta_exp");
@@ -100,6 +99,8 @@ const std::string max_arbor_length("max_arbor_length");
 const std::string max_gc_number("max_gc_number");
 const std::string max_sensing_angle("max_sensing_angle");
 const std::string max_synaptic_distance("max_synaptic_distance");
+const std::string memory_influence("memory_influence");
+const std::string memory_persistence("memory_persistence");
 const std::string min_branching_distance("min_branching_distance");
 
 const std::string neurite_angles("neurite_angles");
