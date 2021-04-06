@@ -123,7 +123,7 @@ void Branching::initialize_next_event(mtPtr rnd_engine)
 void Branching::set_branching_event(Event &ev, signed char ev_type,
                                     double duration)
 {
-    Time ev_time = kernel().simulation_manager.get_time();
+    Time ev_time = kernel().simulation_manager->get_time();
 
     // separate duration into days, hours, minutes, seconds
     double total_hours = std::floor(duration / 60.);
@@ -299,45 +299,82 @@ void Branching::update_splitting_cones(TNodePtr branching_cone,
     GCPtr old_cone   = std::dynamic_pointer_cast<GrowthCone>(branching_cone);
     BranchPtr branch = new_node->get_branch();
 
-    // to prevent overlap between the two second_cones, we put them on the two
-    // corners (last points) of the branch
-    std::pair<BPoint, BPoint> lps = branch->get_last_points();
-    double new_angle              = second_cone->get_state("angle");
-    double module                 = branch->get_last_segment_length();
-
-    BPoint lp1(lps.first), lp2(lps.second);
+    // to prevent overlap between the two second_cones, we put them in between
+    // the previous position and the two corners (last points) of the branch
+    double new_angle(second_cone->get_state("angle")), module;
     BPoint pos = second_cone->get_position();
+
+    BPoint lp1, lp2;
+
+    if (old_cone->cumul_dist_ > 0)
+    {
+        module = old_cone->cumul_dist_;
+
+        // compute what would be the last points
+        BPoint old_pos = branch->xy_at(branch->size() - 1);
+        BPoint l_vec = pos;
+        bg::subtract_point(l_vec, old_pos);
+
+        // orthogonal vector
+        double inv_norm =
+            1. / sqrt(l_vec.x() * l_vec.x() + l_vec.y() * l_vec.y());
+
+        double radius = 0.5*old_cone->get_diameter();
+
+        BPoint r_vec(-radius * l_vec.y() * inv_norm,
+                     radius * l_vec.x() * inv_norm);
+
+        lp1 = BPoint(pos.x() + r_vec.x(), pos.y() + r_vec.y());
+        lp2 = BPoint(pos.x() - r_vec.x(), pos.y() - r_vec.y());
+    }
+    else
+    {
+        std::pair<BPoint, BPoint> lps = branch->get_last_points();
+
+        module = branch->get_last_segment_length();
+
+        lp1 = lps.first;
+        lp2 = lps.second;
+    }
+
     BPoint tmp = BPoint(pos.x() + module * cos(new_angle),
                         pos.y() + module * sin(new_angle));
 
     double d1(bg::distance(tmp, lp1)), d2(bg::distance(tmp, lp2));
-    BPoint pos1 = BPoint(0.5 * (pos.x() + lp1.x()), 0.5 * (pos.y() + lp1.y()));
-    BPoint pos2 = BPoint(0.5 * (pos.x() + lp2.x()), 0.5 * (pos.y() + lp2.y()));
+    BPoint pos1 = BPoint(0.5 * (pos.x() + lp1.x()),
+                         0.5 * (pos.y() + lp1.y()));
+
+    BPoint pos2 = BPoint(0.5 * (pos.x() + lp2.x()),
+                         0.5 * (pos.y() + lp2.y()));
 
     if (d2 > d1)
     {
         std::swap(pos1, pos2);
     }
 
-    // make the two cones start from the parent position and end on lp1/lp2
     int omp_id = kernel().parallelism_manager.get_thread_local_id();
 
-    // remove last point (previous position) from old branch
-    BPolygonPtr last_seg = branch->get_last_segment();
-    branch->retract();
-    new_node->set_position(branch->get_last_xy());
-
-    if (last_seg != nullptr)
+    // remove last segment (if it was added)
+    if (old_cone->cumul_dist_ > 0)
     {
-        BBox box;
-        bg::envelope(*(last_seg.get()), box);
+        // remove last point (previous position) from old branch
+        BPolygonPtr last_seg = branch->get_last_segment();
+        branch->retract();
+        new_node->set_position(branch->get_last_xy());
 
-        // the last segment is initial size - 2 i.e. new size - 1
-        ObjectInfo info = std::make_tuple(
-            neurite_->get_parent_neuron().lock()->get_gid(),
-            neurite_->get_name(), new_node->get_node_id(), branch->size() - 1);
+        if (last_seg != nullptr)
+        {
+            BBox box;
+            bg::envelope(*(last_seg.get()), box);
 
-        kernel().space_manager.remove_object(box, info, omp_id);
+            // the last segment is initial size - 2 i.e. new size - 1
+            ObjectInfo info = std::make_tuple(
+                neurite_->get_parent_neuron().lock()->get_gid(),
+                neurite_->get_name(), new_node->get_node_id(),
+                branch->size() - 1);
+
+            kernel().space_manager.remove_object(box, info, omp_id);
+        }
     }
 
     tmp          = branch->get_last_xy();
@@ -366,7 +403,8 @@ void Branching::update_splitting_cones(TNodePtr branching_cone,
         catch (...)
         {
             std::throw_with_nested(std::runtime_error(
-                "Passed from `Branching::update_splitting_cones`."));
+                "Passed from `Branching::update_splitting_cones` "
+                "(second cone)."));
         }
     }
 
@@ -390,7 +428,8 @@ void Branching::update_splitting_cones(TNodePtr branching_cone,
         catch (...)
         {
             std::throw_with_nested(std::runtime_error(
-                "Passed from `Branching::update_splitting_cones`."));
+                "Passed from `Branching::update_splitting_cones` "
+                "(branching cone)."));
         }
     }
 }
@@ -425,7 +464,7 @@ void Branching::compute_uniform_event(mtPtr rnd_engine)
                             duration);
 
         // send it to the simulation and recorder managers
-        kernel().simulation_manager.new_branching_event(next_uniform_event_);
+        kernel().simulation_manager->new_branching_event(next_uniform_event_);
     }
 }
 
@@ -579,7 +618,7 @@ void Branching::compute_flpl_event(mtPtr rnd_engine)
                             duration);
 
         // send it to the simulation and recorder managers
-        kernel().simulation_manager.new_branching_event(next_flpl_event_);
+        kernel().simulation_manager->new_branching_event(next_flpl_event_);
     }
 }
 
@@ -818,7 +857,7 @@ void Branching::compute_usplit_event(mtPtr rnd_engine)
         set_branching_event(next_usplit_event_, names::gc_splitting, duration);
 
         // send it to the simulation and recorder managers
-        kernel().simulation_manager.new_branching_event(next_usplit_event_);
+        kernel().simulation_manager->new_branching_event(next_usplit_event_);
     }
 }
 
@@ -837,7 +876,7 @@ void Branching::compute_usplit_event(mtPtr rnd_engine)
  */
 bool Branching::van_pelt_branching_occurence(mtPtr rnd_engine, double substep)
 {
-    double t_0 = kernel().simulation_manager.get_current_minutes() + substep;
+    double t_0 = kernel().simulation_manager->get_current_minutes() + substep;
 
     double dt_exp = -std::expm1(-substep / T_);
 

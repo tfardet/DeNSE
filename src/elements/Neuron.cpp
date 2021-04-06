@@ -134,7 +134,8 @@ void Neuron::init_status(
     catch (...)
     {
         std::throw_with_nested(
-            std::runtime_error("Passed from `Neuron::init_status`."));
+            std::runtime_error(
+                "Passed from `Neuron::init_status` (adding soma)."));
     }
 
     // prepare the neurites
@@ -167,28 +168,29 @@ void Neuron::init_status(
 
     if (angles_set)
     {
-        if (nas.size() != num_neurites)
+        if (not names_set)
         {
-            throw InvalidParameter("`neurite_angles` must contain one "
-                                   "entry per neurite, got " +
-                                   std::to_string(nas.size()) + ".",
-                                   __FUNCTION__, __FILE__, __LINE__);
+            InvalidParameter("`neurite_names` must be set to use "
+                             "`neurite_angles`.", __FUNCTION__, __FILE__,
+                             __LINE__);
         }
 
-        if (neurite_statuses.find("dendrites") == neurite_statuses.end())
+        for (std::string name : neurite_names)
         {
-            for (auto p : neurite_statuses)
+            if (nas.find(name) == nas.end())
             {
-                if (nas.find(p.first) == nas.end())
-                {
-                    throw InvalidParameter(
-                        "`neurite_angles` contain invalid neurite names.",
-                        __FUNCTION__, __FILE__, __LINE__);
-                }
+                throw InvalidParameter(
+                    "`neurite_angles` must contain one entry for each neurite "
+                    "name.", __FUNCTION__, __FILE__, __LINE__);
             }
         }
 
-        neurite_angles_ = nas;
+        neurite_angles_.clear();
+
+        for (std::string name : neurite_names)
+        {
+            neurite_angles_[name] = nas[name];
+        }
     }
 
     GCPtr gc_model;
@@ -705,7 +707,7 @@ void Neuron::set_status(const statusMap &status)
     bool bsr, bad, bdd, baa;
 
     bool has_neurites = neurites_.size() > 0;
-    bool sim_started  = (kernel().simulation_manager.get_time() != Time());
+    bool sim_started  = (kernel().simulation_manager->get_time() != Time());
 
     bsr = get_param(status, names::soma_radius, sr);
     if (bsr and sr != soma_radius_)

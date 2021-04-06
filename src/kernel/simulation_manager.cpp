@@ -26,6 +26,7 @@
 #include <cmath>
 #include <limits>
 #include <mutex>
+#include <csignal>
 
 // Includes from kernel
 #include "GrowthCone.hpp"
@@ -41,12 +42,39 @@
 namespace growth
 {
 
+SimulationManager *SimulationManager::simulation_manager_instance_ = 0;
+
+
 /**
  * @brief compare the times of Events
  */
 auto ev_greater = [](const Event &lhs, const Event &rhs) {
     return std::get<edata::TIME>(lhs) > std::get<edata::TIME>(rhs);
 };
+
+
+/*
+ * Instantiate SimulationManager
+ * WARNING: This function must be called by create_kernel_manager ONLY
+ */
+void SimulationManager::create_simulation_manager()
+{
+    if (simulation_manager_instance_ == 0)
+    {
+        simulation_manager_instance_ = new SimulationManager();
+        assert(simulation_manager_instance_);
+    }
+}
+
+
+/*
+ * Remove KernelManager
+ */
+void SimulationManager::destroy_simulation_manager()
+{
+    simulation_manager_instance_->finalize();
+    delete simulation_manager_instance_;
+}
 
 
 SimulationManager::SimulationManager()
@@ -62,8 +90,26 @@ SimulationManager::SimulationManager()
     , previous_resolution_(Time::RESOLUTION)
     , resolution_scale_factor_(1) //! rescale step size respct to old resolution
     , max_resol_(DEFAULT_MAX_RESOL)
+    , print_time_(false)
+    , flag_interrupt_(false)
 {
+    signal(SIGINT, SimulationManager::interrupt);
 }
+
+
+/**
+ * Getter for the singleton instance
+ */
+SimulationManager *SimulationManager::get_simulation_manager()
+{
+    return simulation_manager_instance_;
+}
+
+
+/**
+ * Terminate the simulation after the time-slice is finished.
+ */
+void SimulationManager::terminate() { terminate_ = true; }
 
 
 void SimulationManager::initialize()
@@ -76,6 +122,9 @@ void SimulationManager::initialize()
     initial_time_  = Time();
     final_time_    = Time();
     max_resol_     = DEFAULT_MAX_RESOL;
+
+    print_time_ = false;
+    flag_interrupt_ = false;
 }
 
 
@@ -90,6 +139,25 @@ void SimulationManager::finalize()
  * Reset the SimulationManager to the state at T = 0.
  */
 void SimulationManager::reset_culture() {}
+
+
+/**
+ * Handle signal interruption
+ */
+void SimulationManager::interrupt(int signum)
+{
+    simulation_manager_instance_->interrupt_instance(signum);
+}
+
+
+/**
+ * Signal handler
+ */
+void SimulationManager::interrupt_instance(int signum)
+{
+    flag_interrupt_ = true;
+    terminate_ = true;
+}
 
 
 void SimulationManager::test_random_generator(Random_vecs &values, stype size)
@@ -145,9 +213,6 @@ void SimulationManager::test_random_generator(Random_vecs &values, stype size)
 void SimulationManager::num_threads_changed(int num_omp)
 {
     Time::timeStep old_step = (step_.size() > 0) ? step_.front() : 0L;
-
-    step_.clear();
-    substep_.clear();
 
     step_    = std::vector<Time::timeStep>(num_omp, old_step);
     substep_ = std::vector<double>(num_omp, 0.);
@@ -451,10 +516,8 @@ void SimulationManager::simulate(const Time &t)
             {
                 try
                 {
-                    //~ printf("growing neuron %lu\n", neuron.first);
                     neuron.second->grow(rnd_engine, current_step,
                                         substep_[omp_id] - previous_substep);
-                    //~ printf("neuron %lu grown\n", neuron.first);
                 }
                 catch (...)
                 {
@@ -520,8 +583,24 @@ void SimulationManager::simulate(const Time &t)
                 step_[omp_id]++;
             }
 
+            if (print_time_)
+            {
+#pragma omp single
+                {
+                    std::cout << "\r";
+                    std::cout << "Simulating: "
+                              << (int)(100 * step_[omp_id] / final_step_)
+                              << "%";
+
+                    if (step_[omp_id] == final_step_)
+                    {
+                        std::cout << std::endl;
+                    }
+                }
+            }
+
 #pragma omp barrier
-            if (not exceptions.empty())
+            if (not exceptions.empty() )
             {
                 terminate_ = true;
             }
@@ -534,7 +613,12 @@ void SimulationManager::simulate(const Time &t)
         // set terminate back to false
         terminate_ = false;
 
-        if (exceptions.empty())
+        if (flag_interrupt_)
+        {
+            flag_interrupt_ = false;
+            throw std::runtime_error("Received user interrupt.");
+        }
+        else if (exceptions.empty())
         {
             throw std::runtime_error(
                 "Internal error: terminate was set to true, probably "
@@ -545,6 +629,7 @@ void SimulationManager::simulate(const Time &t)
         }
 
         // rethrow first exception which occured
+        printf("Terminated at step %lu\n", step_[0]);
         std::rethrow_exception(exceptions.at(0));
     }
 
@@ -580,6 +665,13 @@ void SimulationManager::set_status(const statusMap &status)
 
         Time::set_resolution(resolution);
     }
+
+    bool print_time;
+
+    if (get_param(status, names::print_time, print_time))
+    {
+        print_time_ = print_time;
+    }
 }
 
 
@@ -587,6 +679,7 @@ void SimulationManager::get_status(statusMap &status) const
 {
     set_param(status, names::resolution, Time::RESOLUTION, "minute");
     set_param(status, names::max_allowed_resolution, max_resol_, "minute");
+    set_param(status, names::print_time, print_time_, "");
 
     // initial time is always up to date
     set_param(status, "second", initial_time_.get_sec(), "second");
