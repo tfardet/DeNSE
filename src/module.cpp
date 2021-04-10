@@ -755,105 +755,170 @@ void get_skeleton_(SkelNeurite &axon, SkelNeurite &dendrites,
 }
 
 
-void get_geom_skeleton_(std::vector<stype> gids,
-                        std::vector<GEOSGeometry *> &axons,
-                        std::vector<GEOSGeometry *> &dendrites,
-                        std::vector<stype> &dendrite_gids,
-                        std::vector<std::vector<double>> &somas)
+void cascading_union(TNodePtr n, std::vector<BPolygon> &vec_geom)
 {
-    std::vector<GEOSGeometry *> vec;
-    //~ std::vector<BPolygon> vec_tmp;
-    //~ std::vector<BMultiPolygon> vec_geom;
-    std::vector<BPolygon> vec_tmp, vec_geom;
+    auto range = n->segment_range();
+    auto seg_it = range.begin();
+    auto seg_end = range.end();
 
+    std::vector<BPolygon> vec, vec_2, vec_tmp;
+    BPolygon poly1, poly2;
+
+    while (seg_it != seg_end)
+    {
+        poly1 = *((*seg_it).get());
+
+        seg_it++;
+
+        if (seg_it != seg_end)
+        {
+            poly2 = *((*seg_it).get());
+
+            bg::union_(poly1, poly2, vec_tmp);
+
+            vec.push_back(vec_tmp[0]);
+
+            vec_tmp.clear();
+        }
+        else
+        {
+            vec.push_back(poly1);
+        }
+    }
+
+    stype imax = vec.size();
+
+    while (imax > 1)
+    {
+        for (stype i=0; i < imax; i += 2)
+        {
+            poly1 = vec[i];
+
+            if (i + 1 < imax)
+            {
+                poly2 = vec[i + 1];
+
+                bg::union_(poly1, poly2, vec_tmp);
+
+                vec_2.push_back(vec_tmp[0]);
+
+                vec_tmp.clear();
+            }
+            else
+            {
+                vec_2.push_back(poly1);
+            }
+        }
+
+        vec.swap(vec_2);
+
+        vec_2.clear();
+
+        imax = vec.size();
+    }
+
+    if (imax > 0)
+    {
+        vec_geom.push_back(vec.back());
+    }
+}
+
+
+void get_geom_skeleton_(
+    std::vector<stype> gids, std::unordered_map<stype, GEOSGeometry *> &axons,
+    std::unordered_map<stype, std::vector<GEOSGeometry *>> &dendrites,
+    std::unordered_map<stype, std::vector<double>> &somas, bool add_gc)
+{
     GEOSContextHandle_t ch = kernel().space_manager.get_context_handler();
-    GEOSWKTReader *reader  = GEOSWKTReader_create_r(ch);
+    GEOSWKTReader *reader = GEOSWKTReader_create_r(ch);
     GEOSGeometry *geom_tmp, *geom_union;
     std::stringstream s;
     BMultiPolygon mp;
     std::string wkt;
     stype num_poly;
 
-    for (stype gid : gids)
+#pragma omp parallel
     {
-        NeuronPtr neuron = kernel().neuron_manager.get_neuron(gid);
-        auto neurite_it  = neuron->neurite_cbegin();
-        auto neurite_end = neuron->neurite_cend();
+        std::vector<BPolygon> vec_geom;
+        std::vector<GEOSGeometry *> vec;
 
-        while (neurite_it != neurite_end)
+        #pragma omp for
+        for (stype gid : gids)
         {
-            auto node_it  = neurite_it->second->nodes_cbegin();
-            auto node_end = neurite_it->second->nodes_cend();
+            NeuronPtr neuron = kernel().neuron_manager.get_neuron(gid);
+            auto neurite_it  = neuron->neurite_cbegin();
+            auto neurite_end = neuron->neurite_cend();
 
-            vec.clear();
-            vec_geom.clear();
+            dendrites[gid] = std::vector<GEOSGeometry *>();
 
-            while (node_it != node_end)
+            while (neurite_it != neurite_end)
             {
-                for (BPolygonPtr p : node_it->second->segment_range())
+                auto node_it  = neurite_it->second->nodes_cbegin();
+                auto node_end = neurite_it->second->nodes_cend();
+
+                vec.clear();
+                vec_geom.clear();
+
+                while (node_it != node_end)
                 {
-                    s.str("");
-                    s << std::setprecision(12) << bg::wkt(*(p.get()));
-                    geom_tmp =
-                        GEOSWKTReader_read_r(ch, reader, s.str().c_str());
-                    vec.push_back(geom_tmp);
+                    cascading_union(node_it->second, vec_geom);
+                    node_it++;
                 }
 
-                if (vec_tmp.size())
+                for (auto gc : neurite_it->second->gc_range())
                 {
-                    vec_geom.push_back(vec_tmp.back());
-                }
-                node_it++;
-            }
+                    cascading_union(gc.second, vec_geom);
 
-            for (auto gc : neurite_it->second->gc_range())
-            {
-                for (BPolygonPtr p : gc.second->segment_range())
-                {
-                    s.str("");
-                    s << std::setprecision(12) << bg::wkt(*(p.get()));
-                    geom_tmp =
-                        GEOSWKTReader_read_r(ch, reader, s.str().c_str());
-                    vec.push_back(geom_tmp);
+                    if (add_gc)
+                    {
+                        // to nicely finish the neurite, we add a disk to mark
+                        // the growth cone position
+                        BPolygon disk = kernel().space_manager.make_disk(
+                            gc.second->get_position(),
+                            0.5 * gc.second->get_diameter());
+
+                        vec_geom.push_back(disk);
+                    }
                 }
 
-                // to nicely finish the neurite, we add a disk to mark the
-                // growth cone position
-                BPolygon disk = kernel().space_manager.make_disk(
-                    gc.second->get_position(), 0.5 * gc.second->get_diameter());
+#pragma omp critical
+                {
+                    // GEOS is not thread safe
+                    for (auto p : vec_geom)
+                    {
+                        s.str("");
+                        s << std::setprecision(12) << bg::wkt(p);
+                        geom_tmp = GEOSWKTReader_read_r(ch, reader,
+                                                        s.str().c_str());
+                        vec.push_back(geom_tmp);
+                    }
 
-                s.str("");
-                s << std::setprecision(12) << bg::wkt(disk);
-                geom_tmp = GEOSWKTReader_read_r(ch, reader, s.str().c_str());
-                vec.push_back(geom_tmp);
+                    // create the stupid collection to make the union
+                    geom_tmp = GEOSGeom_createCollection_r(
+                        ch, GEOS_MULTIPOLYGON, vec.data(), vec.size());
+
+                    geom_union = GEOSUnaryUnion_r(ch, geom_tmp);
+
+                    GEOSGeom_destroy_r(ch, geom_tmp);
+                }
+
+                if (neurite_it->second->get_type() == "axon")
+                {
+                    axons[gid] = geom_union;
+                }
+                else
+                {
+                    dendrites[gid].push_back(geom_union);
+                }
+
+                vec.clear();
+
+                neurite_it++;
             }
 
-            //~ // create the stupid collection to make the union
-            geom_tmp   = GEOSGeom_createCollection_r(ch, GEOS_MULTIPOLYGON,
-                                                   vec.data(), vec.size());
-            geom_union = GEOSUnaryUnion_r(ch, geom_tmp);
-
-            GEOSGeom_destroy_r(ch, geom_tmp);
-
-            if (neurite_it->second->get_type() == "axon")
-            {
-                axons.push_back(geom_union);
-                //~ axons.insert(axons.end(), vec.begin(), vec.end());
-            }
-            else
-            {
-                dendrites.push_back(geom_union);
-                dendrite_gids.push_back(gid);
-                //~ dendrites.insert(dendrites.end(), vec.begin(), vec.end());
-            }
-
-            vec.clear();
-
-            neurite_it++;
+            BPoint soma = neuron->get_position();
+            somas[gid] = {soma.x(), soma.y(), neuron->get_soma_radius()};
         }
-
-        BPoint soma = neuron->get_position();
-        somas.push_back({soma.x(), soma.y(), neuron->get_soma_radius()});
     }
 }
 

@@ -158,12 +158,6 @@ void TopologicalNode::update_branch_and_parent(BaseNodePtr parent, BranchPtr b)
 
     dist_to_parent_ = dist_to_soma_ - parent->get_distance_to_soma();
 
-    if (dist_to_parent_ < 0)
-        printf("Updated a node with negative dts %f from %f; source were %f "
-               "and %f\n",
-               dist_to_parent_, old_dts, dist_to_soma_,
-               parent->get_distance_to_soma());
-
     branch_ = b;
 }
 

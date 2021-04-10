@@ -189,11 +189,10 @@ void get_branches_data_(stype neuron, const std::string &neurite,
                         stype start_point);
 
 
-void get_geom_skeleton_(std::vector<stype> gids,
-                        std::vector<GEOSGeometry *> &axons,
-                        std::vector<GEOSGeometry *> &dendrites,
-                        std::vector<stype> &dendrite_gids,
-                        std::vector<std::vector<double>> &somas);
+void get_geom_skeleton_(
+    std::vector<stype> gids, std::unordered_map<stype, GEOSGeometry *> &axons,
+    std::unordered_map<stype, std::vector<GEOSGeometry *>> &dendrites,
+    std::unordered_map<stype, std::vector<double>> &somas, bool add_gc);
 
 
 void generate_synapses_(

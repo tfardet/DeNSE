@@ -426,8 +426,6 @@ void SpaceManager::add_object(const BPoint &start, const BPoint &stop,
                             correct_polygon(l_vec, r_vec, stop, lp_1, lp_2,
                                             old_lp1, old_lp2, outer,
                                             last_segment, dist, right_order);
-
-                            corrected = true;
                         }
                         else
                         {

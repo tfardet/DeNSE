@@ -1911,7 +1911,7 @@ def _get_pyskeleton(gid, unsigned int resolution=10):
     return somas, py_axons, py_dendrites, py_growth_cones, py_nodes
 
 
-def _get_geom_skeleton(gid):
+def _get_geom_skeleton(gid, add_gc=True):
     '''
     Gets the geometries composing the skeletons.
 
@@ -1919,6 +1919,9 @@ def _get_geom_skeleton(gid):
     ----------
     gid : int, optional (default: all neurons)
         Id of the neuron(s) to plot.
+    add_gc : bool, optional (default: True)
+        Whether the disk representing the growth cone position should be
+        included (risk of multipolygons).
 
     Returns
     -------
@@ -1936,9 +1939,10 @@ def _get_geom_skeleton(gid):
     from shapely.geometry.base import geom_factory
 
     cdef:
-        vector[GEOSGeometry*] axons, dendrites
-        vector[vector[double]] somas
-        vector[stype] gids, dendrite_gids
+        unordered_map[stype, GEOSGeometry*] axons, vec_d
+        unordered_map[stype, vector[GEOSGeometry*]] dendrites
+        unordered_map[stype, vector[double]] somas
+        vector[stype] gids
 
     if gid is None:
         gids = get_neurons()
@@ -1946,34 +1950,37 @@ def _get_geom_skeleton(gid):
         # creates a vector of size 1
         assert is_neuron_(gid) == "neuron", \
             "GID `{}` is not a neuron.".format(gid)
-        gids =  vector[stype](1, <stype>gid)
+        gids = vector[stype](1, <stype>gid)
     elif nonstring_container(gid):
         for n in gid:
             assert is_neuron_(n), "GID `{}` is not a neuron.".format(n)
             gids.push_back(<stype>n)
     else:
         raise ArgumentError("`gid` should be an int, a list, or None.")
-    get_geom_skeleton_(gids, axons, dendrites, dendrite_gids, somas)
 
-    py_axons, py_dendrites = {}, {}
+    get_geom_skeleton_(gids, axons, dendrites, somas, add_gc)
 
-    for i in range(axons.size()):
-        a           = axons[i]
+    py_axons, py_dendrites, py_somas = {}, {}, []
+
+    for gid in gids:
+        a = axons[gid]
         pygeos_geom = <uintptr_t>a
+
         if a is not NULL:
-            py_axons[gids[i]] = geom_factory(pygeos_geom)
+            py_axons[gid] = geom_factory(pygeos_geom)
 
-    for i in range(dendrites.size()):
-        d           = dendrites[i]
-        gid_d       = dendrite_gids[i]
-        pygeos_geom = <uintptr_t>d
-        if d is not NULL:
-            if gid_d in py_dendrites:
-                py_dendrites[gid_d].append(geom_factory(pygeos_geom))
-            else:
-                py_dendrites[gid_d] = [geom_factory(pygeos_geom)]
+        for d in dendrites[gid]:
+            pygeos_geom = <uintptr_t>d
 
-    return py_axons, py_dendrites, np.array(somas).T
+            if d is not NULL:
+                if gid in py_dendrites:
+                    py_dendrites[gid].append(geom_factory(pygeos_geom))
+                else:
+                    py_dendrites[gid] = [geom_factory(pygeos_geom)]
+
+        py_somas.append(somas[gid])
+
+    return py_axons, py_dendrites, np.array(py_somas).T
 
 
 def _generate_synapses(bool crossings_only, double density, bool only_new_syn,

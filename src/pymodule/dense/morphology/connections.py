@@ -284,7 +284,8 @@ def get_connections(source_neurons=None, target_neurons=None,
     if all_neurons:
         syn_density = spine_density.m_as("1 / micrometer**2")
 
-        axons, dendrites, somas = _pg._get_geom_skeleton(all_neurons)
+        axons, dendrites, somas = _pg._get_geom_skeleton(all_neurons,
+                                                         add_gc=False)
 
         soma_pos = np.array(somas)[:2, :].T
 
