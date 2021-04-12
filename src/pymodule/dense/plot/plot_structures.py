@@ -196,8 +196,8 @@ def plot_neurons(gid=None, mode="sticks", show_nodes=False, show_active_gc=True,
         new_lines += 1
 
     # plot the somas
-    n = len(somas[2])
-    radii = somas[2] if soma_radius is None else np.repeat(soma_radius, n)
+    n = len(somas)
+    radii = somas[:, 2] if soma_radius is None else np.repeat(soma_radius, n)
 
     if mode in ("sticks", "mixed"):
         radii *= 1.05
@@ -208,7 +208,7 @@ def plot_neurons(gid=None, mode="sticks", show_nodes=False, show_active_gc=True,
     size = (1.5*r_min if len(gid) <= 10
             else (r_min if len(gid) <= 100 else 0.7*r_min))
 
-    for i, x, y, r in zip(gid, somas[0], somas[1], radii):
+    for i, x, y, r in zip(gid, somas[:, 0], somas[:, 1], radii):
         circle = plt.Circle(
             (x, y), r, color=soma_color, alpha=soma_alpha)
         artist = ax.add_artist(circle)

@@ -1381,18 +1381,6 @@ void Neurite::set_status(const statusMap &status)
         cr_neurite_.available = cr_neurite_.eq_cr;
 
         cr_normal_ = std::normal_distribution<>(0, cr_neurite_.var);
-#ifndef NDEBUG
-        printf("\n"
-               " CRITICAL RESOURCE BRANCHING \n"
-               "%s : %f \n"
-               "%s : %f \n"
-               "%s : %f \n",
-               names::res_neurite_available.c_str(), cr_neurite_.available,
-               names::gc_split_angle_mean.c_str(),
-               gc_split_angle_mean_ * 180 / M_PI,
-               names::gc_split_angle_std.c_str(),
-               gc_split_angle_std_ * 180 / M_PI);
-#endif
     }
 
     if (use_critical_resource_)

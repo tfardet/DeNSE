@@ -762,7 +762,7 @@ void cascading_union(TNodePtr n, std::vector<BPolygon> &vec_geom, bool is_axon,
     auto seg_it = range.begin();
     auto seg_end = range.end();
 
-    std::vector<BPolygon> vec, vec_2, vec_tmp;
+    std::vector<BPolygon> vec, vec_tmp;
     BPolygon poly1, poly2;
 
     while (seg_it != seg_end)
@@ -787,10 +787,12 @@ void cascading_union(TNodePtr n, std::vector<BPolygon> &vec_geom, bool is_axon,
         }
     }
 
-    stype imax = vec.size();
+    stype imax(vec.size()), imax2;
 
     while (imax > 1)
     {
+        imax2 = 0;
+
         for (stype i=0; i < imax; i += 2)
         {
             poly1 = vec[i];
@@ -801,21 +803,20 @@ void cascading_union(TNodePtr n, std::vector<BPolygon> &vec_geom, bool is_axon,
 
                 bg::union_(poly1, poly2, vec_tmp);
 
-                vec_2.push_back(vec_tmp[0]);
+                vec[imax2] = vec_tmp[0];
 
                 vec_tmp.clear();
             }
             else
             {
-                vec_2.push_back(poly1);
+                vec[imax2] = poly1;
             }
+
+            imax2++;
         }
 
-        vec.swap(vec_2);
-
-        vec_2.clear();
-
-        imax = vec.size();
+        vec.resize(imax2);
+        imax = imax2;
     }
 
     if (imax > 0)
@@ -919,93 +920,64 @@ void get_geom_skeleton_(
     BMultiPolygon mp;
     std::string wkt;
     stype num_poly;
+    int i, imax;
 
-#pragma omp parallel
+    std::unordered_map<stype, std::vector<BPolygon>> ax;
+    std::unordered_map<stype, std::vector<std::vector<BPolygon>>> dend;
+
+    // get boost polygons in parallel
+    get_neurite_polygons(gids, ax, dend, somas, axon_buffer_radius, add_gc);
+
+    std::vector<std::vector<BPolygon>> vvp;
+
+    std::vector<GEOSGeometry *> vec_geos;
+
+    // GEOS is not thread safe so conversion is not using OpenMP
+    for (stype gid : gids)
     {
-        std::vector<BPolygon> vec_geom;
-        std::vector<GEOSGeometry *> vec;
+        vvp = dend[gid];
+        vvp.push_back(ax[gid]);
 
-        #pragma omp for
-        for (stype gid : gids)
+        i = 0;
+        imax = vvp.size();
+
+        for (auto vec : vvp)
         {
-            NeuronPtr neuron = kernel().neuron_manager.get_neuron(gid);
-            auto neurite_it  = neuron->neurite_cbegin();
-            auto neurite_end = neuron->neurite_cend();
+            i++;
 
-            dendrites[gid] = std::vector<GEOSGeometry *>();
-
-            while (neurite_it != neurite_end)
+            for (auto p : vec)
             {
-                auto node_it  = neurite_it->second->nodes_cbegin();
-                auto node_end = neurite_it->second->nodes_cend();
-
-                bool is_axon = (neurite_it->second->get_type() == "axon");
-
-                vec.clear();
-                vec_geom.clear();
-
-                while (node_it != node_end)
-                {
-                    cascading_union(node_it->second, vec_geom, is_axon,
-                                    axon_buffer_radius);
-                    node_it++;
-                }
-
-                for (auto gc : neurite_it->second->gc_range())
-                {
-                    cascading_union(gc.second, vec_geom, is_axon,
-                                    axon_buffer_radius);
-
-                    if (add_gc)
-                    {
-                        // to nicely finish the neurite, we add a disk to mark
-                        // the growth cone position
-                        BPolygon disk = kernel().space_manager.make_disk(
-                            gc.second->get_position(),
-                            0.5 * gc.second->get_diameter());
-
-                        vec_geom.push_back(disk);
-                    }
-                }
-
-#pragma omp critical
-                {
-                    // GEOS is not thread safe
-                    for (auto p : vec_geom)
-                    {
-                        s.str("");
-                        s << std::setprecision(12) << bg::wkt(p);
-                        geom_tmp = GEOSWKTReader_read_r(ch, reader,
-                                                        s.str().c_str());
-                        vec.push_back(geom_tmp);
-                    }
-
-                    // create the stupid collection to make the union
-                    geom_tmp = GEOSGeom_createCollection_r(
-                        ch, GEOS_MULTIPOLYGON, vec.data(), vec.size());
-
-                    geom_union = GEOSUnaryUnion_r(ch, geom_tmp);
-
-                    GEOSGeom_destroy_r(ch, geom_tmp);
-                }
-
-                if (is_axon)
-                {
-                    axons[gid] = geom_union;
-                }
-                else
-                {
-                    dendrites[gid].push_back(geom_union);
-                }
-
-                vec.clear();
-
-                neurite_it++;
+                s.str("");
+                s << std::setprecision(12) << bg::wkt(p);
+                geom_tmp = GEOSWKTReader_read_r(ch, reader,
+                                                s.str().c_str());
+                vec_geos.push_back(geom_tmp);
             }
 
-            BPoint soma = neuron->get_position();
-            somas[gid] = {soma.x(), soma.y(), neuron->get_soma_radius()};
+            // create the stupid collection to make the union
+            geom_tmp = GEOSGeom_createCollection_r(
+                ch, GEOS_MULTIPOLYGON, vec_geos.data(), vec_geos.size());
+
+            geom_union = GEOSUnaryUnion_r(ch, geom_tmp);
+
+            GEOSGeom_destroy_r(ch, geom_tmp);
+
+            if (i == imax)
+            {
+                axons[gid] = geom_union;
+            }
+            else
+            {
+                dendrites[gid].push_back(geom_union);
+            }
+
+            vec_geos.clear();
         }
+
+        vvp.clear();
+
+        dend.erase(gid);
+        ax.erase(gid);
     }
 }
 

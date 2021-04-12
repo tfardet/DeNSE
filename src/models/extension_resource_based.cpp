@@ -352,9 +352,9 @@ bool ResourceBasedExtensionModel::set_status(const statusMap &status)
 
     initialize_CR();
 
-#ifndef NDEBUG
-    printinfo();
-#endif
+//~ #ifndef NDEBUG
+    //~ printinfo();
+//~ #endif
 
     return false;
 }
