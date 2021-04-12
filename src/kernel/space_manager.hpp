@@ -130,6 +130,7 @@ class SpaceManager : public ManagerInterface
                              stype other_neuron,
                              const std::string &other_neurite,
                              BPolygonPtr poly);
+
     void generate_synapses_crossings(
         double synapse_density, bool only_new_syn, bool autapse_allowed,
         const std::set<stype> &presyn_pop, const std::set<stype> &postsyn_pop,
@@ -140,6 +141,7 @@ class SpaceManager : public ManagerInterface
         std::vector<stype> &presyn_segments,
         std::vector<stype> &postsyn_segments, std::vector<double> &pre_syn_x,
         std::vector<double> &pre_syn_y);
+
     void generate_synapses_all(
         double spine_density, bool only_new_syn, bool autapse_allowed,
         const std::set<stype> &presyn_pop, const std::set<stype> &postsyn_pop,
@@ -157,15 +159,22 @@ class SpaceManager : public ManagerInterface
         const std::vector<double> &heights,
         const std::vector<std::string> &names,
         const std::vector<std::unordered_map<std::string, double>> &properties);
+
     void get_environment(
         GEOSGeom &environment, std::vector<GEOSGeom> &areas,
         std::vector<double> &heights, std::vector<std::string> &names,
         std::vector<std::unordered_map<std::string, double>> &properties) const;
+
     const BRing &get_env_border(int omp_id) const;
+
     GEOSContextHandle_t get_context_handler() const;
+
     void destroy_geom(GEOSGeom geom) const;
+
     void copy_polygon(BMultiPolygonPtr copy, const BPolygon &p);
     void copy_polygon(BMultiPolygonPtr copy, const BMultiPolygon &p);
+
+    BPolygon make_buffer(BPolygon p, double radius) const;
     BPolygon make_disk(BPoint position, double radius) const;
 
     int get_region_thread(const BPoint &position) const;

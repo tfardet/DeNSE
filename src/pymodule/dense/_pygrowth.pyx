@@ -1911,7 +1911,7 @@ def _get_pyskeleton(gid, unsigned int resolution=10):
     return somas, py_axons, py_dendrites, py_growth_cones, py_nodes
 
 
-def _get_geom_skeleton(gid, add_gc=True):
+def _get_geom_skeleton(gid, axon_buffer_radius=-1., add_gc=True):
     '''
     Gets the geometries composing the skeletons.
 
@@ -1919,6 +1919,9 @@ def _get_geom_skeleton(gid, add_gc=True):
     ----------
     gid : int, optional (default: all neurons)
         Id of the neuron(s) to plot.
+    axon_buffer_radius : float, optional (default: -1.)
+        Radius of the buffer that should be performed around the axons.
+        No buffer is performed if the value is negative or zero.
     add_gc : bool, optional (default: True)
         Whether the disk representing the growth cone position should be
         included (risk of multipolygons).
@@ -1958,7 +1961,8 @@ def _get_geom_skeleton(gid, add_gc=True):
     else:
         raise ArgumentError("`gid` should be an int, a list, or None.")
 
-    get_geom_skeleton_(gids, axons, dendrites, somas, add_gc)
+    get_geom_skeleton_(gids, axons, dendrites, somas, axon_buffer_radius,
+                       add_gc)
 
     py_axons, py_dendrites, py_somas = {}, {}, []
 
@@ -1980,7 +1984,7 @@ def _get_geom_skeleton(gid, add_gc=True):
 
         py_somas.append(somas[gid])
 
-    return py_axons, py_dendrites, np.array(py_somas).T
+    return py_axons, py_dendrites, np.array(py_somas)
 
 
 def _generate_synapses(bool crossings_only, double density, bool only_new_syn,

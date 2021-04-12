@@ -755,7 +755,8 @@ void get_skeleton_(SkelNeurite &axon, SkelNeurite &dendrites,
 }
 
 
-void cascading_union(TNodePtr n, std::vector<BPolygon> &vec_geom)
+void cascading_union(TNodePtr n, std::vector<BPolygon> &vec_geom, bool is_axon,
+                     double axon_buffer_radius)
 {
     auto range = n->segment_range();
     auto seg_it = range.begin();
@@ -819,7 +820,88 @@ void cascading_union(TNodePtr n, std::vector<BPolygon> &vec_geom)
 
     if (imax > 0)
     {
-        vec_geom.push_back(vec.back());
+        if (is_axon and axon_buffer_radius > 0)
+        {
+            vec_geom.push_back(
+                kernel().space_manager.make_buffer(vec.back(),
+                                                   axon_buffer_radius));
+        }
+        else
+        {
+            vec_geom.push_back(vec.back());
+        }
+    }
+}
+
+
+void get_neurite_polygons(
+    std::vector<stype> gids,
+    std::unordered_map<stype, std::vector<BPolygon>> &axons,
+    std::unordered_map<stype, std::vector<std::vector<BPolygon>>> &dendrites,
+    std::unordered_map<stype, std::vector<double>> &somas,
+    double axon_buffer_radius, bool add_gc)
+{
+#pragma omp parallel
+    {
+        std::vector<BPolygon> vec_geom;
+
+        #pragma omp for
+        for (stype gid : gids)
+        {
+            NeuronPtr neuron = kernel().neuron_manager.get_neuron(gid);
+            auto neurite_it  = neuron->neurite_cbegin();
+            auto neurite_end = neuron->neurite_cend();
+
+            dendrites[gid] = std::vector<std::vector<BPolygon>>();
+
+            while (neurite_it != neurite_end)
+            {
+                auto node_it  = neurite_it->second->nodes_cbegin();
+                auto node_end = neurite_it->second->nodes_cend();
+
+                bool is_axon = (neurite_it->second->get_type() == "axon");
+
+                vec_geom.clear();
+
+                while (node_it != node_end)
+                {
+                    cascading_union(node_it->second, vec_geom, is_axon,
+                                    axon_buffer_radius);
+                    node_it++;
+                }
+
+                for (auto gc : neurite_it->second->gc_range())
+                {
+                    cascading_union(gc.second, vec_geom, is_axon,
+                                    axon_buffer_radius);
+
+                    if (add_gc)
+                    {
+                        // to nicely finish the neurite, we add a disk to mark
+                        // the growth cone position
+                        BPolygon disk = kernel().space_manager.make_disk(
+                            gc.second->get_position(),
+                            0.5 * gc.second->get_diameter());
+
+                        vec_geom.push_back(disk);
+                    }
+                }
+
+                if (is_axon)
+                {
+                    axons[gid] = vec_geom;
+                }
+                else
+                {
+                    dendrites[gid].push_back(vec_geom);
+                }
+
+                neurite_it++;
+            }
+
+            BPoint soma = neuron->get_position();
+            somas[gid] = {soma.x(), soma.y(), neuron->get_soma_radius()};
+        }
     }
 }
 
@@ -827,7 +909,8 @@ void cascading_union(TNodePtr n, std::vector<BPolygon> &vec_geom)
 void get_geom_skeleton_(
     std::vector<stype> gids, std::unordered_map<stype, GEOSGeometry *> &axons,
     std::unordered_map<stype, std::vector<GEOSGeometry *>> &dendrites,
-    std::unordered_map<stype, std::vector<double>> &somas, bool add_gc)
+    std::unordered_map<stype, std::vector<double>> &somas,
+    double axon_buffer_radius, bool add_gc)
 {
     GEOSContextHandle_t ch = kernel().space_manager.get_context_handler();
     GEOSWKTReader *reader = GEOSWKTReader_create_r(ch);
@@ -856,18 +939,22 @@ void get_geom_skeleton_(
                 auto node_it  = neurite_it->second->nodes_cbegin();
                 auto node_end = neurite_it->second->nodes_cend();
 
+                bool is_axon = (neurite_it->second->get_type() == "axon");
+
                 vec.clear();
                 vec_geom.clear();
 
                 while (node_it != node_end)
                 {
-                    cascading_union(node_it->second, vec_geom);
+                    cascading_union(node_it->second, vec_geom, is_axon,
+                                    axon_buffer_radius);
                     node_it++;
                 }
 
                 for (auto gc : neurite_it->second->gc_range())
                 {
-                    cascading_union(gc.second, vec_geom);
+                    cascading_union(gc.second, vec_geom, is_axon,
+                                    axon_buffer_radius);
 
                     if (add_gc)
                     {
@@ -902,7 +989,7 @@ void get_geom_skeleton_(
                     GEOSGeom_destroy_r(ch, geom_tmp);
                 }
 
-                if (neurite_it->second->get_type() == "axon")
+                if (is_axon)
                 {
                     axons[gid] = geom_union;
                 }

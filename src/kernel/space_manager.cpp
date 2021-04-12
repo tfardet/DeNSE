@@ -266,6 +266,19 @@ void correct_polygon(const BPoint &vec_step, const BPoint &vec_ortho,
 }
 
 
+BPolygon SpaceManager::make_buffer(BPolygon p, double radius) const
+{
+    BMultiPolygon geom;
+
+    bg::strategy::buffer::distance_symmetric<double> distance_strategy(radius);
+
+    bg::buffer(p, geom, distance_strategy, side_strategy_,
+               join_strategy_, end_strategy_, circle_strategy_);
+
+    return geom[0];
+}
+
+
 BPolygon SpaceManager::make_disk(BPoint position, double radius) const
 {
     BMultiPolygon geom;

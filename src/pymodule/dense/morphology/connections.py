@@ -255,6 +255,7 @@ def get_connections(source_neurons=None, target_neurons=None,
         sum of the distances between the somas and the synapse.
     """
     crossings_only, max_spine_length = None, None
+    axon_buffer_radius = -1.
 
     if method == "intersections":
         crossings_only = True
@@ -262,7 +263,7 @@ def get_connections(source_neurons=None, target_neurons=None,
         crossings_only = False
 
         if 'max_spine_length' in kwargs:
-            max_spine_length = kwargs["max_spine_length"].m_as("micrometer")
+            axon_buffer_radius = kwargs["max_spine_length"].m_as("micrometer")
         else:
             raise AttributeError("`max_spine_length` must be passed if "
                                  "`method` is 'spines'.")
@@ -284,19 +285,25 @@ def get_connections(source_neurons=None, target_neurons=None,
     if all_neurons:
         syn_density = spine_density.m_as("1 / micrometer**2")
 
-        axons, dendrites, somas = _pg._get_geom_skeleton(all_neurons,
-                                                         add_gc=False)
+        axons, dendrites, somas = _pg._get_geom_skeleton(
+            all_neurons, axon_buffer_radius=axon_buffer_radius, add_gc=False)
 
-        soma_pos = np.array(somas)[:2, :].T
+        somas = somas[:, :2]
 
-        if crossings_only:
-            edges, positions, distances = _edges_from_intersections(
-                source_set, target_set, axons, dendrites, soma_pos, syn_density,
-                connection_probability, autapse_allowed)
-        else:
-            edges, positions, distances = _edges_from_spines(
-                source_set, target_set, axons, dendrites, soma_pos, syn_density,
-                connection_probability, autapse_allowed, max_spine_length)
+        for i, (axon_gid, axon_polygon) in enumerate(axons.items()):
+            if axon_gid in source_set:
+                for j, (dend_gid, vd) in enumerate(dendrites.items()):
+                    connection_allowed = (dend_gid != axon_gid or
+                                          autapse_allowed)
+
+                    if dend_gid in target_set and connection_allowed:
+                        etuple = (axon_gid, dend_gid)
+                        for d_polygon in vd:
+                            if axon_polygon.intersects(d_polygon):
+                                _get_synapses_intersection(
+                                    axon_polygon, d_polygon, syn_density,
+                                    somas, connection_probability, etuple, i, j,
+                                    edges, positions, distances)
 
     return edges, positions, distances
 
@@ -331,98 +338,6 @@ def _get_synapses_intersection(axon_polygon, d_polygon, synapse_density, somas,
             positions.extend([pos]*num_synapses)
             edges.extend([etuple]*num_synapses)
             distances.extend([dist]*num_synapses)
-
-
-def _edges_from_intersections(source_set, target_set, axons, dendrites,
-                              somas, synapse_density, connection_probability,
-                              autapse_allowed):
-    """
-    Obtain synapses with a simple approach based only on neurite intersections.
-    """
-    edges, positions, distances = [], [], []
-
-    for i, (axon_gid, axon_polygon) in enumerate(axons.items()):
-        if axon_gid in source_set:
-            for j, (dend_gid, vd) in enumerate(dendrites.items()):
-                connection_allowed = (dend_gid != axon_gid or autapse_allowed)
-
-                if dend_gid in target_set and connection_allowed:
-                    etuple = (axon_gid, dend_gid)
-                    for d_polygon in vd:
-                        if axon_polygon.intersects(d_polygon):
-                            _get_synapses_intersection(
-                                axon_polygon, d_polygon, synapse_density,
-                                somas, connection_probability, etuple, i, j, 
-                                edges, positions, distances)
-
-    return edges, positions, distances
-
-
-def _edges_from_spines(source_set, target_set, axons, dendrites, somas,
-                       synapse_density, connection_probability, autapse_allowed,
-                       max_spine_length):
-    """
-    Create synapses based on distance and spine density.
-    """
-    edges, positions, distances = [], [], []
-
-    # save dendrites buffers
-    buffers = {}
-
-    for i, (axon_gid, axon_polygon) in enumerate(axons.items()):
-        if axon_gid in source_set:
-            axon_polygon = axon_polygon.buffer(max_spine_length)
-            for j, (dend_gid, vd) in enumerate(dendrites.items()):
-                connection_allowed = (dend_gid != axon_gid or autapse_allowed)
-
-                if dend_gid in target_set and connection_allowed:
-                    etuple = (axon_gid, dend_gid)
-                    for k, d_polygon in enumerate(vd):
-                        if axon_polygon.intersects(d_polygon):
-                            _get_synapses_intersection(
-                                axon_polygon, d_polygon, synapse_density, somas,
-                                connection_probability, etuple, i, j, edges,
-                                positions, distances)
-                        else:
-                            # buffer the neurite to get intersections with
-                            # extending spines
-                            d_buffer = None
-                            d_tuple  = (j, k)
-
-                            if d_tuple not in buffers:
-                                d_buffer   = d_polygon.buffer(max_spine_length)
-                                buffers[d_tuple] = d_buffer
-                            else:
-                                d_buffer = buffers[d_tuple]
-
-                            if axon_polygon.intersects(d_buffer):
-                                # we use a linear spine density of an area
-                                # 1 micron thick along the intersected line
-                                # i.e. linear density has same magnitude as
-                                # areal density
-                                insct_line = \
-                                    axon_polygon.intersection(d_buffer.exterior)
-                                
-                                # then compute the number of synapses
-                                total   = insct_line.length * synapse_density \
-                                          * connection_probability
-                                rnd     = np.random.random()
-                                num_syn = int(total) + \
-                                          (1 if (total - int(total)) < rnd
-                                           else 0)
-
-                                if num_syn > 0:
-                                    s_soma = np.array(somas[i])
-                                    t_soma = np.array(somas[j])
-                                    pos    = insct_line.centroid
-                                    dist   = np.linalg.norm(s_soma - pos) \
-                                            + np.linalg.norm(t_soma - pos)
-
-                                    positions.extend([pos]*num_syn)
-                                    edges.extend([etuple]*num_syn)
-                                    distances.extend([dist]*num_syn)
-
-    return edges, positions, distances
 
 
 # ------ #
