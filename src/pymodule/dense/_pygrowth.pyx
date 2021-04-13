@@ -1987,42 +1987,37 @@ def _get_geom_skeleton(gid, axon_buffer_radius=-1., add_gc=True):
     return py_axons, py_dendrites, np.array(py_somas)
 
 
-def _generate_synapses(bool crossings_only, double density, bool only_new_syn,
-                       bool autapse_allowed, source_neurons, target_neurons):
+def _generate_synapses(set source_neurons, set target_neurons, double density,
+                       double connection_proba, double axon_buffer_radius=-1.,
+                       bool autapse_allowed=False):
     '''
     Generate the synapses from the neurons' morphologies.
     '''
     cdef:
-        vector[stype] presyn_neurons, postsyn_neurons
-        vector[string] presyn_neurites, postsyn_neurites
-        vector[stype] presyn_nodes, postsyn_nodes
-        vector[stype] presyn_segments, postsyn_segments
-        vector[double] pre_syn_x, pre_syn_y, post_syn_x, post_syn_y
-        cset[stype] presyn_pop  = source_neurons
-        cset[stype] postsyn_pop = target_neurons
+        vector[stype] presyn_neurons, postsyn_neurons, all_gids
+        vector[string] postsyn_neurites
+        vector[double] syn_x, syn_y, distances
+        vector[int] num_synapses
+        vector[stype] presyn_pop  = list(source_neurons)
+        vector[stype] postsyn_pop = list(target_neurons)
 
-    generate_synapses_(crossings_only, density, only_new_syn, autapse_allowed,
-                       presyn_pop, postsyn_pop, presyn_neurons, postsyn_neurons,
-                       presyn_neurites, postsyn_neurites, presyn_nodes,
-                       postsyn_nodes, presyn_segments, postsyn_segments,
-                       pre_syn_x, pre_syn_y, post_syn_x, post_syn_y)
+    all_gids = list(source_neurons.union(target_neurons))
+
+    generate_synapses_(density, connection_proba, axon_buffer_radius,
+        autapse_allowed, source_neurons, target_neurons, all_gids,
+        presyn_neurons, postsyn_neurons, postsyn_neurites, num_synapses, syn_x,
+        syn_y, distances)
+
+    edges = np.array((presyn_neurons, postsyn_neurons), dtype=int).T
 
     data = {
-        "source_neuron": presyn_neurons,
-        "target_neuron": postsyn_neurons,
-        "source_neurite": presyn_neurites,
-        "target_neurite": postsyn_neurites,
-        "source_node": presyn_nodes,
-        "target_node": postsyn_nodes,
-        "source_segment": presyn_segments,
-        "target_segment": postsyn_segments,
-        "source_pos_x": pre_syn_x,
-        "target_pos_x": post_syn_x,
-        "source_pos_y": pre_syn_y,
-        "target_pos_y": post_syn_y,
+        #~ "target_neurite": postsyn_neurites,
+        "weight": np.array(num_synapses, dtype=float),
+        "position": np.array((syn_x, syn_y)).T,
+        "distance": np.array(distances)
     }
 
-    return data
+    return edges, data
 
 
 def _get_parent_and_soma_distances(neuron, neurite, node, segment):

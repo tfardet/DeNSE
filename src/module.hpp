@@ -197,16 +197,13 @@ void get_geom_skeleton_(
 
 
 void generate_synapses_(
-    bool crossings_only, double density, bool only_new_syn,
-    bool autapse_allowed, const std::set<stype> &presyn_pop,
-    const std::set<stype> &postsyn_pop, std::vector<stype> &presyn_neurons,
-    std::vector<stype> &postsyn_neurons,
-    std::vector<std::string> &presyn_neurites,
-    std::vector<std::string> &postsyn_neurites,
-    std::vector<stype> &presyn_nodes, std::vector<stype> &postsyn_nodes,
-    std::vector<stype> &presyn_segments, std::vector<stype> &postsyn_segments,
-    std::vector<double> &pre_syn_x, std::vector<double> &pre_syn_y,
-    std::vector<double> &post_syn_x, std::vector<double> &post_syn_y);
+    double density, double connection_proba, double axon_buffer_radius,
+    bool autapse_allowed, const std::vector<stype> &presyn_pop,
+    const std::vector<stype> &postsyn_pop, const std::vector<stype> &all_gids,
+    std::vector<stype> &presyn_neurons, std::vector<stype> &postsyn_neurons,
+    std::vector<std::string> &postsyn_neurites, std::vector<int> &num_synapses,
+    std::vector<double> &syn_x, std::vector<double> &syn_y,
+    std::vector<double> distances);
 
 
 void get_distances_(stype gid, const std::string &neurite_name, stype node,

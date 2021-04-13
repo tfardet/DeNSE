@@ -28,6 +28,7 @@
 #include <cstdlib>
 #include <memory>
 #include <stdexcept>
+#include <random>
 
 #include <boost/range/adaptor/strided.hpp>
 
@@ -983,35 +984,109 @@ void get_geom_skeleton_(
 
 
 void generate_synapses_(
-    bool crossings_only, double density, bool only_new_syn,
-    bool autapse_allowed, const std::set<stype> &presyn_pop,
-    const std::set<stype> &postsyn_pop, std::vector<stype> &presyn_neurons,
-    std::vector<stype> &postsyn_neurons,
-    std::vector<std::string> &presyn_neurites,
-    std::vector<std::string> &postsyn_neurites,
-    std::vector<stype> &presyn_nodes, std::vector<stype> &postsyn_nodes,
-    std::vector<stype> &presyn_segments, std::vector<stype> &postsyn_segments,
-    std::vector<double> &pre_syn_x, std::vector<double> &pre_syn_y,
-    std::vector<double> &post_syn_x, std::vector<double> &post_syn_y)
+    double density, double connection_proba, double axon_buffer_radius,
+    bool autapse_allowed, const std::vector<stype> &presyn_pop,
+    const std::vector<stype> &postsyn_pop, const std::vector<stype> &all_gids,
+    std::vector<stype> &presyn_neurons, std::vector<stype> &postsyn_neurons,
+    std::vector<std::string> &postsyn_neurites, std::vector<int> &num_synapses,
+    std::vector<double> &syn_x, std::vector<double> &syn_y,
+    std::vector<double> distances)
 {
-    if (crossings_only)
-    {
-        kernel().space_manager.generate_synapses_crossings(
-            density, only_new_syn, autapse_allowed, presyn_pop, postsyn_pop,
-            presyn_neurons, postsyn_neurons, presyn_neurites, postsyn_neurites,
-            presyn_nodes, postsyn_nodes, presyn_segments, postsyn_segments,
-            pre_syn_x, pre_syn_y);
+    std::unordered_map<stype, std::vector<BPolygon>> ax;
+    std::unordered_map<stype, std::vector<double>> somas;
+    std::unordered_map<stype, std::vector<std::vector<BPolygon>>> dend;
 
-        post_syn_x = pre_syn_x;
-        post_syn_y = pre_syn_y;
-    }
-    else
+    bool add_gc = false;
+
+    // get boost polygons in parallel
+    get_neurite_polygons(all_gids, ax, dend, somas, axon_buffer_radius, add_gc);
+
+#pragma omp parallel
     {
-        kernel().space_manager.generate_synapses_all(
-            density, only_new_syn, autapse_allowed, presyn_pop, postsyn_pop,
-            presyn_neurons, postsyn_neurons, presyn_neurites, postsyn_neurites,
-            presyn_nodes, postsyn_nodes, presyn_segments, postsyn_segments,
-            pre_syn_x, pre_syn_y, post_syn_x, post_syn_y);
+        std::vector<stype> src, tgt;
+        std::vector<std::string> dendrite;
+        std::vector<double> x, y, dist;
+        std::vector<int> nsyn;
+
+        BMultiPolygon mp;
+        BPoint centroid;
+
+        double total, xs, ys, xt, yt, xc, yc;
+        int num_syn;
+
+        int omp_id = kernel().parallelism_manager.get_thread_local_id();
+
+        std::uniform_real_distribution<double> uniform;
+
+        mtPtr rng = kernel().rng_manager.get_rng(omp_id);
+
+        #pragma omp for
+        for (stype source : presyn_pop)
+        {
+            xs = somas[source][0];
+            ys = somas[source][1];
+
+            for (stype target : postsyn_pop)
+            {
+                xt = somas[target][0];
+                yt = somas[target][1];
+
+                for (BPolygon sp : ax[source])
+                {
+                    for (auto vec : dend[target])
+                    {
+                        for (BPolygon tp : vec)
+                        {
+                            bg::intersection(sp, tp, mp);
+
+                            if (not mp.empty())
+                            {
+                                total =
+                                    bg::area(mp) * density * connection_proba;
+
+                                num_syn = total;
+
+                                if ((total - num_syn) < uniform(*(rng.get())))
+                                {
+                                    num_syn++;
+                                }
+
+                                if (num_syn)
+                                {
+                                    nsyn.push_back(num_syn);
+                                    src.push_back(source);
+                                    tgt.push_back(target);
+                                    // dendrite; @todo
+                                    bg::centroid(mp, centroid);
+                                    xc = centroid.x();
+                                    yc = centroid.y(); 
+                                    x.push_back(xc);
+                                    y.push_back(yc);
+                                    dist.push_back(
+                                        sqrt((xs - xc)*(xs - xc) +
+                                             (ys - yc)*(ys - yc))
+                                        + sqrt((xt - xc)*(xt - xc) +
+                                               (yt - yc)*(yt - yc)));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+#pragma omp critical
+        {
+            presyn_neurons.insert(presyn_neurons.end(), src.begin(), src.end());
+            postsyn_neurons.insert(postsyn_neurons.end(), tgt.begin(),
+                                   tgt.end());
+            // postsyn_neurites @todo
+            num_synapses.insert(num_synapses.end(), nsyn.begin(), nsyn.end());
+            syn_x.insert(syn_x.end(), x.begin(), x.end());
+            syn_y.insert(syn_y.end(), y.begin(), y.end());
+            distances.insert(distances.end(), dist.begin(), dist.end());
+        }
+
     }
 }
 

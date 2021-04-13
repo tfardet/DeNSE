@@ -147,15 +147,13 @@ cdef extern from "../module.hpp" namespace "growth":
         bool add_gc) except +
     
     cdef void generate_synapses_(
-        bool crossings_only, double density,
-        bool only_new_syn, bool autapse_allowed,
-        const cset[stype] &presyn_pop, const cset[stype] &postsyn_pop,
+        double density, double connection_proba, double axon_buffer_radius,
+        bool autapse_allowed, const vector[stype] &presyn_pop,
+        const vector[stype] &postsyn_pop, const vector[stype] &all_gids,
         vector[stype] &presyn_neurons, vector[stype] &postsyn_neurons,
-        vector[string] &presyn_neurites, vector[string] &postsyn_neurites,
-        vector[stype] &presyn_nodes, vector[stype] &postsyn_nodes,
-        vector[stype] &presyn_segments, vector[stype] &postsyn_segments,
-        vector[double] &pre_syn_x, vector[double] &pre_syn_y,
-        vector[double] &post_syn_x, vector[double] &post_syn_y) except +
+        vector[string] &postsyn_neurites, vector[int] &num_synapses,
+        vector[double] &syn_x, vector[double] &syn_y,
+        vector[double] distances) except +
     
     cdef void get_distances_(stype gid, const string &neurite, stype node,
                              stype segment, double &dist_to_parent,
