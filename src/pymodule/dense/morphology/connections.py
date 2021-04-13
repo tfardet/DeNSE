@@ -187,6 +187,160 @@ def get_connections(source_neurons=None, target_neurons=None,
     """
     Obtain connection between `source_neurons` and `target_neurons` through
     a given method for synapse generation.
+    The number of connection made will depend on the number of contacts between
+    an axon and a dendrite.
+    At each contact site, the number of potential synapses is computed as:
+    .. math::
+        n_{s, p} = \rho_s \cdot A_I
+    with :math:`\rho_s` the `spine_density` and :math:`A_I` the intersection
+    area.
+    And the number of actual synapses is then:
+    .. math::
+        N_s = n_{s,p} \cdot p_c
+    with :math:`p_c` the connection probability.
+    Parameters
+    ----------
+    source_neurons : list of neurons, optional (default: all neurons)
+        Neurons which will possess the pre-synaptic compartments of the
+        connections (i.e. be connected through their axons)
+    target_neurons : list of neurons, optional (default: all neurons)
+        Neurons which will possess the post-synaptic compartments of the
+        connections (i.e. be connected through their dendrites or soma)
+    method : str, optional (default: "intersections")
+        Method which use to generate synapses. Either "intersections" (synapses
+        can be generated only when neurites overlap) or "spines" (neurites can
+        be connected if they are closer than a certain distance
+        `max_spine_length`).
+    spine_density : float (quantity), optional (default: :math:`0.5 \mu m^{-2}`)
+        Number of spines per unit area, determines how many synapses are made
+        given an area of interaction.
+    connection_probability : float, optional (default: 0.2)
+        Probability of making a synapse for each spine/axon interaction which
+        has been found geometrically.
+    only_new_connections : bool, optional (default: False)
+        If true, only the potential synapses that have been found during the
+        last simulation run will be used; otherwise, all potential sites found
+        since time 0 will be used.
+    autapse_allowed : bool, optional (default: False)
+        Whether connection from a neuron onto itself are generated if possible.
+    **kwargs : optional arguments
+        When using the "spines" `method`, an additional argument
+        `max_spine_length` must be passed, specifying the maximum length
+        at which neighboring neurites can still be connected through a spine
+        (must be a dimensioned quantity, a length).
+
+    Returns
+    -------
+    edges : list of edges of shape (e, 2)
+        The edges created.
+    data : dict
+        Edge attributes, including
+
+        - "position", array of shape (e, 2) containing the positions of the
+          synapses
+        - "distance", an approximation of the cable distance between the
+          neurons, given by the sum of the distances between the somas and the
+          synapse.
+    """
+    crossings_only, max_spine_length = None, None
+    axon_buffer_radius = -1.
+
+    if method == "intersections":
+        crossings_only = True
+    elif method == "spines":
+        crossings_only = False
+
+        if 'max_spine_length' in kwargs:
+            axon_buffer_radius = kwargs["max_spine_length"].m_as("micrometer")
+        else:
+            raise AttributeError("`max_spine_length` must be passed if "
+                                 "`method` is 'spines'.")
+    else:
+        raise ValueError("`method` must be either 'intersections' or 'spines'.")
+
+    if source_neurons is None:
+        source_neurons = _pg.get_neurons(as_ints=True)
+
+    if target_neurons is None:
+        target_neurons = _pg.get_neurons(as_ints=True)
+
+    source_set  = set(source_neurons)
+    target_set  = set(target_neurons)
+    all_neurons = source_set.union(target_set)
+    
+    edges, positions, distances = [], [], []
+
+    if all_neurons:
+        syn_density = spine_density.m_as("1 / micrometer**2")
+
+        axons, dendrites, somas = _pg._get_geom_skeleton(
+            all_neurons, axon_buffer_radius=axon_buffer_radius, add_gc=False)
+
+        somas = somas[:, :2]
+
+        for i, (axon_gid, axon_polygon) in enumerate(axons.items()):
+            if axon_gid in source_set:
+                for j, (dend_gid, vd) in enumerate(dendrites.items()):
+                    connection_allowed = (dend_gid != axon_gid or
+                                          autapse_allowed)
+
+                    if dend_gid in target_set and connection_allowed:
+                        etuple = (axon_gid, dend_gid)
+                        for d_polygon in vd:
+                            if axon_polygon.intersects(d_polygon):
+                                _get_synapses_intersection(
+                                    axon_polygon, d_polygon, syn_density,
+                                    somas, connection_probability, etuple, i, j,
+                                    edges, positions, distances)
+
+    data = {
+        "position": positions,
+        "distance": distances
+    }
+
+    return edges, data
+
+
+# ------------------------------ #
+# Python-level synapse formation #
+# ------------------------------ #
+
+def _get_synapses_intersection(axon_polygon, d_polygon, synapse_density, somas,
+                               connection_probability, etuple, i, j, edges,
+                               positions, distances):
+    '''
+    Tool fuction to find synapses of intersecting neurites
+    '''
+    intsct = axon_polygon.intersection(d_polygon)
+
+    if not isinstance(intsct, MultiPolygon):
+        intsct = [intsct]
+    
+    for poly in intsct:
+        total        = poly.area * synapse_density * connection_probability
+        rnd          = np.random.random()
+        num_synapses = int(total) + (1 if (total - int(total)) < rnd else 0)
+
+        if num_synapses > 0:
+            s_soma = np.array(somas[i])
+            t_soma = np.array(somas[j])
+            pos    = poly.centroid
+            dist   = np.linalg.norm(s_soma - pos) \
+                    + np.linalg.norm(t_soma - pos)
+
+            positions.extend([pos]*num_synapses)
+            edges.extend([etuple]*num_synapses)
+            distances.extend([dist]*num_synapses)
+
+
+def get_connections_cpp(source_neurons=None, target_neurons=None,
+                    method="intersections", spine_density=0.5/(um**2),
+                    connection_probability=0.2, autapse_allowed=False,
+                    **kwargs):
+    """
+    THIS IS TOO SLOW.
+    Obtain connection between `source_neurons` and `target_neurons` through
+    a given method for synapse generation.
 
     The number of connection made will depend on the number of contacts between
     an axon and a dendrite.
@@ -277,7 +431,7 @@ def get_connections(source_neurons=None, target_neurons=None,
     source_set  = set(source_neurons)
     target_set  = set(target_neurons)
     all_neurons = source_set.union(target_set)
-    
+
     edges, positions, distances = [], [], []
 
     if all_neurons:
