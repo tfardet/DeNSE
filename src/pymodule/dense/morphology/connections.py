@@ -180,7 +180,7 @@ def generate_network(source_neurons=None, target_neurons=None,
     return network
 
 
-def get_connections(source_neurons=None, target_neurons=None,
+def get_connections_old(source_neurons=None, target_neurons=None,
                     method="intersections", spine_density=0.5/(um**2),
                     connection_probability=0.2, autapse_allowed=False,
                     **kwargs):
@@ -333,7 +333,7 @@ def _get_synapses_intersection(axon_polygon, d_polygon, synapse_density, somas,
             distances.extend([dist]*num_synapses)
 
 
-def get_connections_cpp(source_neurons=None, target_neurons=None,
+def get_connections(source_neurons=None, target_neurons=None,
                     method="intersections", spine_density=0.5/(um**2),
                     connection_probability=0.2, autapse_allowed=False,
                     **kwargs):

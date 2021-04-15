@@ -790,6 +790,7 @@ void cascading_union(TNodePtr n, std::vector<BPolygon> &vec_geom, bool is_axon,
 
     stype imax(vec.size()), imax2;
 
+    // cascading union on final vector
     while (imax > 1)
     {
         imax2 = 0;
@@ -1008,7 +1009,8 @@ void generate_synapses_(
         std::vector<double> x, y, dist;
         std::vector<int> nsyn;
 
-        BMultiPolygon mp;
+        BMultiPolygon mp, mp2;
+        BPolygon sp, tp;
         BPoint centroid;
 
         double total, xs, ys, xt, yt, xc, yc;
@@ -1020,29 +1022,79 @@ void generate_synapses_(
 
         mtPtr rng = kernel().rng_manager.get_rng(omp_id);
 
+        // merge all polygons from each neurite
+        #pragma omp for
+        for (stype gid : presyn_pop)
+        {
+            mp.clear();
+            mp2.clear();
+
+            for (BPolygon &p : ax[gid])
+            {
+                bg::union_(p, mp, mp2);
+
+                mp.swap(mp2);
+                mp2.clear();
+            }
+
+            ax[gid][0] = mp.back();
+        }
+
+        #pragma omp for
+        for (stype gid : postsyn_pop)
+        {
+            for (auto &vec : dend[gid])
+            {
+                mp.clear();
+                mp2.clear();
+
+                for (BPolygon &p : vec)
+                {
+                    bg::union_(p, mp, mp2);
+
+                    mp.swap(mp2);
+                    mp2.clear();
+                }
+
+                vec[0] = mp.back();
+            }
+        }
+
+        // check intersections
         #pragma omp for
         for (stype source : presyn_pop)
         {
             xs = somas[source][0];
             ys = somas[source][1];
 
-            for (stype target : postsyn_pop)
+            if (ax[source].size() > 0)
             {
-                xt = somas[target][0];
-                yt = somas[target][1];
+                sp = ax[source][0];
 
-                for (BPolygon sp : ax[source])
+                for (stype target : postsyn_pop)
                 {
-                    for (auto vec : dend[target])
+                    if (source == target and not autapse_allowed)
                     {
-                        for (BPolygon tp : vec)
+                        continue;
+                    }
+
+                    xt = somas[target][0];
+                    yt = somas[target][1];
+
+                    for (auto &vec : dend[target])
+                    {
+                        if (vec.size() > 0)
                         {
+                            tp = vec[0];
+
+                            mp.clear();
+
                             bg::intersection(sp, tp, mp);
 
-                            if (not mp.empty())
+                            for (BPolygon p : mp)
                             {
                                 total =
-                                    bg::area(mp) * density * connection_proba;
+                                    bg::area(p) * density * connection_proba;
 
                                 num_syn = total;
 
@@ -1057,7 +1109,7 @@ void generate_synapses_(
                                     src.push_back(source);
                                     tgt.push_back(target);
                                     // dendrite; @todo
-                                    bg::centroid(mp, centroid);
+                                    bg::centroid(p, centroid);
                                     xc = centroid.x();
                                     yc = centroid.y(); 
                                     x.push_back(xc);
