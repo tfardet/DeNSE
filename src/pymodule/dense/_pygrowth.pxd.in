@@ -153,7 +153,7 @@ cdef extern from "../module.hpp" namespace "growth":
         vector[stype] &presyn_neurons, vector[stype] &postsyn_neurons,
         vector[string] &postsyn_neurites, vector[int] &num_synapses,
         vector[double] &syn_x, vector[double] &syn_y,
-        vector[double] distances) except +
+        vector[double] &distances) except +
     
     cdef void get_distances_(stype gid, const string &neurite, stype node,
                              stype segment, double &dist_to_parent,

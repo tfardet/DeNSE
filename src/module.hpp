@@ -203,7 +203,7 @@ void generate_synapses_(
     std::vector<stype> &presyn_neurons, std::vector<stype> &postsyn_neurons,
     std::vector<std::string> &postsyn_neurites, std::vector<int> &num_synapses,
     std::vector<double> &syn_x, std::vector<double> &syn_y,
-    std::vector<double> distances);
+    std::vector<double> &distances);
 
 
 void get_distances_(stype gid, const std::string &neurite_name, stype node,

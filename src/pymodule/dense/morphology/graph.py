@@ -492,6 +492,9 @@ class SpatialNetwork(_BaseNetwork):
         '''
         Add a list of edges to the network.
 
+        This function automatically combines multiple synapses into a single
+        edge and updates the edge weight accordingly.
+
         Parameters
         ----------
         edge_list : list of 2-tuples or np.array of shape (edge_nb, 2)
@@ -552,7 +555,8 @@ class SpatialNetwork(_BaseNetwork):
                         # some attributes may be skipped but they must be
                         # for all connections
                         if k in attributes:
-                            v[idx] = (mult*v[idx] + attributes[k][i]) / (mult + 1.)
+                            v[idx] = \
+                                (mult*v[idx] + attributes[k][i]) / (mult + 1.)
                         else:
                             assert not self._attributes[k], \
                                 "Attribute '" + k + "' is required."
@@ -585,11 +589,8 @@ class SpatialNetwork(_BaseNetwork):
             existing = np.zeros(len(edge_list), dtype=bool)
 
             for i, e in enumerate(edge_list):
-                try:
-                    self.edge_id(e)
+                if self.has_edge(e):
                     existing[i] = 1
-                except:
-                    pass
 
             num_existing = np.sum(existing)
             exist_edges  = edge_list[existing]

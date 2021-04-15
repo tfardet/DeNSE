@@ -1903,6 +1903,7 @@ def _get_pyskeleton(gid, unsigned int resolution=10):
     get_skeleton_(axons, dendrites, nodes, growth_cones, somas, gids,
                   resolution)
 
+    py_somas        = np.array(somas).T
     py_axons        = (axons.first, axons.second)
     py_dendrites    = (dendrites.first, dendrites.second)
     py_growth_cones = (growth_cones.first, growth_cones.second)

@@ -991,7 +991,7 @@ void generate_synapses_(
     std::vector<stype> &presyn_neurons, std::vector<stype> &postsyn_neurons,
     std::vector<std::string> &postsyn_neurites, std::vector<int> &num_synapses,
     std::vector<double> &syn_x, std::vector<double> &syn_y,
-    std::vector<double> distances)
+    std::vector<double> &distances)
 {
     std::unordered_map<stype, std::vector<BPolygon>> ax;
     std::unordered_map<stype, std::vector<double>> somas;
