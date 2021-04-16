@@ -856,7 +856,9 @@ void get_neurite_polygons(
             auto neurite_end = neuron->neurite_cend();
 
             #pragma omp critical
-            dendrites[gid] = std::vector<std::vector<BPolygon>>();
+            {
+                dendrites[gid] = std::vector<std::vector<BPolygon>>();
+            }
 
             while (neurite_it != neurite_end)
             {
@@ -891,13 +893,16 @@ void get_neurite_polygons(
                     }
                 }
 
-                if (is_axon)
+                #pragma omp critical
                 {
-                    axons[gid] = vec_geom;
-                }
-                else
-                {
-                    dendrites[gid].push_back(vec_geom);
+                    if (is_axon)
+                    {
+                        axons[gid] = vec_geom;
+                    }
+                    else
+                    {
+                        dendrites[gid].push_back(vec_geom);
+                    }
                 }
 
                 neurite_it++;
