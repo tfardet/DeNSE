@@ -855,6 +855,7 @@ void get_neurite_polygons(
             auto neurite_it  = neuron->neurite_cbegin();
             auto neurite_end = neuron->neurite_cend();
 
+            #pragma omp critical
             dendrites[gid] = std::vector<std::vector<BPolygon>>();
 
             while (neurite_it != neurite_end)
