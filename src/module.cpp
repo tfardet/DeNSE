@@ -778,7 +778,7 @@ void cascading_union(TNodePtr n, std::vector<BPolygon> &vec_geom, bool is_axon,
 
             bg::union_(poly1, poly2, vec_tmp);
 
-            vec.push_back(vec_tmp[0]);
+            vec.push_back(std::move(vec_tmp[0]));
 
             vec_tmp.clear();
         }
@@ -805,13 +805,13 @@ void cascading_union(TNodePtr n, std::vector<BPolygon> &vec_geom, bool is_axon,
 
                 bg::union_(poly1, poly2, vec_tmp);
 
-                vec[imax2] = vec_tmp[0];
+                vec[imax2] = std::move(vec_tmp[0]);
 
                 vec_tmp.clear();
             }
             else
             {
-                vec[imax2] = poly1;
+                vec[imax2] = std::move(poly1);
             }
 
             imax2++;
@@ -831,7 +831,7 @@ void cascading_union(TNodePtr n, std::vector<BPolygon> &vec_geom, bool is_axon,
         }
         else
         {
-            vec_geom.push_back(vec.back());
+            vec_geom.push_back(std::move(vec.back()));
         }
     }
 }
@@ -844,9 +844,12 @@ void get_neurite_polygons(
     std::unordered_map<stype, std::vector<double>> &somas,
     double axon_buffer_radius, bool add_gc)
 {
-#pragma omp parallel
+    #pragma omp parallel
     {
         std::vector<BPolygon> vec_geom;
+
+        std::unordered_map<stype, std::vector<BPolygon>> ma;
+        std::unordered_map<stype, std::vector<std::vector<BPolygon>>> md;
 
         #pragma omp for
         for (stype gid : gids)
@@ -855,10 +858,7 @@ void get_neurite_polygons(
             auto neurite_it  = neuron->neurite_cbegin();
             auto neurite_end = neuron->neurite_cend();
 
-            #pragma omp critical
-            {
-                dendrites[gid] = std::vector<std::vector<BPolygon>>();
-            }
+            std::vector<std::vector<BPolygon>> vvd;
 
             while (neurite_it != neurite_end)
             {
@@ -889,30 +889,120 @@ void get_neurite_polygons(
                             gc.second->get_position(),
                             0.5 * gc.second->get_diameter());
 
-                        vec_geom.push_back(disk);
+                        vec_geom.push_back(std::move(disk));
                     }
                 }
 
-                #pragma omp critical
+                if (is_axon)
                 {
-                    if (is_axon)
-                    {
-                        axons[gid] = vec_geom;
-                    }
-                    else
-                    {
-                        dendrites[gid].push_back(vec_geom);
-                    }
+                    ma[gid] = std::move(vec_geom);
+                }
+                else
+                {
+                    vvd.push_back(std::move(vec_geom));
                 }
 
                 neurite_it++;
             }
 
+            md[gid] = std::move(vvd);
+
             BPoint soma = neuron->get_position();
             somas[gid] = {soma.x(), soma.y(), neuron->get_soma_radius()};
         }
+
+        #pragma omp critical
+        {
+            for (auto &it : ma)
+            {
+                axons[it.first] = std::move(it.second);
+            }
+            
+            for (auto &it : md)
+            {
+                dendrites[it.first] = std::move(it.second);
+            }
+        }
     }
 }
+
+
+//~ void get_neurite_polygons(
+    //~ std::vector<stype> gids,
+    //~ std::unordered_map<stype, std::vector<BPolygon>> &axons,
+    //~ std::unordered_map<stype, std::vector<std::vector<BPolygon>>> &dendrites,
+    //~ std::unordered_map<stype, std::vector<double>> &somas,
+    //~ double axon_buffer_radius, bool add_gc)
+//~ {
+//~ #pragma omp parallel
+    //~ {
+        //~ std::vector<BPolygon> vec_geom;
+
+        //~ #pragma omp for
+        //~ for (stype gid : gids)
+        //~ {
+            //~ NeuronPtr neuron = kernel().neuron_manager.get_neuron(gid);
+            //~ auto neurite_it  = neuron->neurite_cbegin();
+            //~ auto neurite_end = neuron->neurite_cend();
+
+            //~ #pragma omp critical
+            //~ {
+                //~ dendrites[gid] = std::vector<std::vector<BPolygon>>();
+            //~ }
+
+            //~ while (neurite_it != neurite_end)
+            //~ {
+                //~ auto node_it  = neurite_it->second->nodes_cbegin();
+                //~ auto node_end = neurite_it->second->nodes_cend();
+
+                //~ bool is_axon = (neurite_it->second->get_type() == "axon");
+
+                //~ vec_geom.clear();
+
+                //~ while (node_it != node_end)
+                //~ {
+                    //~ cascading_union(node_it->second, vec_geom, is_axon,
+                                    //~ axon_buffer_radius);
+                    //~ node_it++;
+                //~ }
+
+                //~ for (auto gc : neurite_it->second->gc_range())
+                //~ {
+                    //~ cascading_union(gc.second, vec_geom, is_axon,
+                                    //~ axon_buffer_radius);
+
+                    //~ if (add_gc)
+                    //~ {
+                        //~ // to nicely finish the neurite, we add a disk to mark
+                        //~ // the growth cone position
+                        //~ BPolygon disk = kernel().space_manager.make_disk(
+                            //~ gc.second->get_position(),
+                            //~ 0.5 * gc.second->get_diameter());
+
+                        //~ vec_geom.push_back(std::move(disk));
+                    //~ }
+                //~ }
+
+                //~ #pragma omp critical
+                //~ {
+                    //~ if (is_axon)
+                    //~ {
+                        //~ axons[gid] = vec_geom;
+                    //~ }
+                    //~ else
+                    //~ {
+                        //~ dendrites[gid].push_back(vec_geom);
+                    //~ }
+                //~ }
+
+                //~ neurite_it++;
+            //~ }
+
+            //~ BPoint soma = neuron->get_position();
+            //~ somas[gid] = {soma.x(), soma.y(), neuron->get_soma_radius()};
+        //~ }
+    //~ }
+//~ }
 
 
 void get_geom_skeleton_(
