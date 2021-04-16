@@ -844,12 +844,12 @@ void get_neurite_polygons(
     std::unordered_map<stype, std::vector<double>> &somas,
     double axon_buffer_radius, bool add_gc)
 {
+    std::vector<std::vector<std::vector<BPolygon>>> vvd(gids.size());
+    std::vector<std::vector<BPolygon>> vva(gids.size());
+
     #pragma omp parallel
     {
         std::vector<BPolygon> vec_geom;
-
-        std::unordered_map<stype, std::vector<BPolygon>> ma;
-        std::unordered_map<stype, std::vector<std::vector<BPolygon>>> md;
 
         #pragma omp for
         for (stype gid : gids)
@@ -858,7 +858,7 @@ void get_neurite_polygons(
             auto neurite_it  = neuron->neurite_cbegin();
             auto neurite_end = neuron->neurite_cend();
 
-            std::vector<std::vector<BPolygon>> vvd;
+            std::vector<std::vector<BPolygon>> vv;
 
             while (neurite_it != neurite_end)
             {
@@ -895,34 +895,27 @@ void get_neurite_polygons(
 
                 if (is_axon)
                 {
-                    ma[gid] = std::move(vec_geom);
+                    vva[gid] = std::move(vec_geom);
                 }
                 else
                 {
-                    vvd.push_back(std::move(vec_geom));
+                    vv.push_back(std::move(vec_geom));
                 }
 
                 neurite_it++;
             }
 
-            md[gid] = std::move(vvd);
+            vvd[gid] = std::move(vv);
 
             BPoint soma = neuron->get_position();
             somas[gid] = {soma.x(), soma.y(), neuron->get_soma_radius()};
         }
+    }
 
-        #pragma omp critical
-        {
-            for (auto &it : ma)
-            {
-                axons[it.first] = std::move(it.second);
-            }
-            
-            for (auto &it : md)
-            {
-                dendrites[it.first] = std::move(it.second);
-            }
-        }
+    for (stype gid : gids)
+    {
+        axons[gid] = std::move(vva[gid]);
+        dendrites[gid] = std::move(vvd[gid]);
     }
 }
 
