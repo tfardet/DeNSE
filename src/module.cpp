@@ -844,9 +844,6 @@ void get_neurite_polygons(
     std::unordered_map<stype, std::vector<double>> &somas,
     double axon_buffer_radius, bool add_gc)
 {
-    std::vector<std::vector<std::vector<BPolygon>>> vvd(gids.size());
-    std::vector<std::vector<BPolygon>> vva(gids.size());
-
     #pragma omp parallel
     {
         std::vector<BPolygon> vec_geom;
@@ -858,7 +855,7 @@ void get_neurite_polygons(
             auto neurite_it  = neuron->neurite_cbegin();
             auto neurite_end = neuron->neurite_cend();
 
-            std::vector<std::vector<BPolygon>> vv;
+            std::vector<std::vector<BPolygon>> vvd;
 
             while (neurite_it != neurite_end)
             {
@@ -895,107 +892,27 @@ void get_neurite_polygons(
 
                 if (is_axon)
                 {
-                    vva[gid] = std::move(vec_geom);
+                    #pragma omp critical
+                    axons[gid] = std::move(vec_geom);
                 }
                 else
                 {
-                    vv.push_back(std::move(vec_geom));
+                    vvd.push_back(std::move(vec_geom));
                 }
 
                 neurite_it++;
             }
-
-            vvd[gid] = std::move(vv);
+            
+            #pragma omp critical
+            {
+                dendrites[gid] = std::move(vvd);
+            }
 
             BPoint soma = neuron->get_position();
             somas[gid] = {soma.x(), soma.y(), neuron->get_soma_radius()};
         }
     }
-
-    for (stype gid : gids)
-    {
-        axons[gid] = std::move(vva[gid]);
-        dendrites[gid] = std::move(vvd[gid]);
-    }
 }
-
-
-//~ void get_neurite_polygons(
-    //~ std::vector<stype> gids,
-    //~ std::unordered_map<stype, std::vector<BPolygon>> &axons,
-    //~ std::unordered_map<stype, std::vector<std::vector<BPolygon>>> &dendrites,
-    //~ std::unordered_map<stype, std::vector<double>> &somas,
-    //~ double axon_buffer_radius, bool add_gc)
-//~ {
-//~ #pragma omp parallel
-    //~ {
-        //~ std::vector<BPolygon> vec_geom;
-
-        //~ #pragma omp for
-        //~ for (stype gid : gids)
-        //~ {
-            //~ NeuronPtr neuron = kernel().neuron_manager.get_neuron(gid);
-            //~ auto neurite_it  = neuron->neurite_cbegin();
-            //~ auto neurite_end = neuron->neurite_cend();
-
-            //~ #pragma omp critical
-            //~ {
-                //~ dendrites[gid] = std::vector<std::vector<BPolygon>>();
-            //~ }
-
-            //~ while (neurite_it != neurite_end)
-            //~ {
-                //~ auto node_it  = neurite_it->second->nodes_cbegin();
-                //~ auto node_end = neurite_it->second->nodes_cend();
-
-                //~ bool is_axon = (neurite_it->second->get_type() == "axon");
-
-                //~ vec_geom.clear();
-
-                //~ while (node_it != node_end)
-                //~ {
-                    //~ cascading_union(node_it->second, vec_geom, is_axon,
-                                    //~ axon_buffer_radius);
-                    //~ node_it++;
-                //~ }
-
-                //~ for (auto gc : neurite_it->second->gc_range())
-                //~ {
-                    //~ cascading_union(gc.second, vec_geom, is_axon,
-                                    //~ axon_buffer_radius);
-
-                    //~ if (add_gc)
-                    //~ {
-                        //~ // to nicely finish the neurite, we add a disk to mark
-                        //~ // the growth cone position
-                        //~ BPolygon disk = kernel().space_manager.make_disk(
-                            //~ gc.second->get_position(),
-                            //~ 0.5 * gc.second->get_diameter());
-
-                        //~ vec_geom.push_back(std::move(disk));
-                    //~ }
-                //~ }
-
-                //~ #pragma omp critical
-                //~ {
-                    //~ if (is_axon)
-                    //~ {
-                        //~ axons[gid] = vec_geom;
-                    //~ }
-                    //~ else
-                    //~ {
-                        //~ dendrites[gid].push_back(vec_geom);
-                    //~ }
-                //~ }
-
-                //~ neurite_it++;
-            //~ }
-
-            //~ BPoint soma = neuron->get_position();
-            //~ somas[gid] = {soma.x(), soma.y(), neuron->get_soma_radius()};
-        //~ }
-    //~ }
-//~ }
 
 
 void get_geom_skeleton_(
