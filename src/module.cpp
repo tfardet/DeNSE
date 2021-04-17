@@ -893,7 +893,9 @@ void get_neurite_polygons(
                 if (is_axon)
                 {
                     #pragma omp critical
-                    axons[gid] = std::move(vec_geom);
+                    {
+                        axons[gid] = std::move(vec_geom);
+                    }
                 }
                 else
                 {
