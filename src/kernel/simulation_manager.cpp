@@ -92,9 +92,7 @@ SimulationManager::SimulationManager()
     , max_resol_(DEFAULT_MAX_RESOL)
     , print_time_(false)
     , flag_interrupt_(false)
-{
-    signal(SIGINT, SimulationManager::interrupt);
-}
+{}
 
 
 /**
@@ -228,8 +226,10 @@ void SimulationManager::initialize_simulation_(const Time &t)
     assert(kernel().is_initialized());
     resolution_scale_factor_ = previous_resolution_ / Time::RESOLUTION;
 
-    // @todo: remove final_step and reset step_ to zero everytime, use Time
-    // objects for discrete events
+    // set signal handler
+    std::signal(SIGINT, SimulationManager::interrupt);
+
+    // compute final time
     final_time_ = initial_time_ + t;
 
     double old_substep = final_substep_;
@@ -616,7 +616,7 @@ void SimulationManager::simulate(const Time &t)
         if (flag_interrupt_)
         {
             flag_interrupt_ = false;
-            throw std::runtime_error("Received user interrupt.");
+            throw std::runtime_error("Simulation received user interrupt.");
         }
         else if (exceptions.empty())
         {

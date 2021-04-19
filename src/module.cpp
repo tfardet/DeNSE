@@ -29,6 +29,7 @@
 #include <memory>
 #include <stdexcept>
 #include <random>
+#include <csignal>
 
 #include <boost/range/adaptor/strided.hpp>
 
@@ -51,6 +52,13 @@
 namespace ba = boost::adaptors;
 
 const int INVALID_AXON_NAME(1);
+
+bool flag_interrupt = false;
+
+void signal_handler(int signal)
+{
+    flag_interrupt = true;
+}
 
 
 namespace growth
@@ -851,68 +859,79 @@ void get_neurite_polygons(
         #pragma omp for
         for (stype gid : gids)
         {
-            NeuronPtr neuron = kernel().neuron_manager.get_neuron(gid);
-            auto neurite_it  = neuron->neurite_cbegin();
-            auto neurite_end = neuron->neurite_cend();
-
-            std::vector<std::vector<BPolygon>> vvd;
-
-            while (neurite_it != neurite_end)
+            #pragma omp flush (flag_interrupt)
+            if (!flag_interrupt)
             {
-                auto node_it  = neurite_it->second->nodes_cbegin();
-                auto node_end = neurite_it->second->nodes_cend();
+                NeuronPtr neuron = kernel().neuron_manager.get_neuron(gid);
+                auto neurite_it  = neuron->neurite_cbegin();
+                auto neurite_end = neuron->neurite_cend();
 
-                bool is_axon = (neurite_it->second->get_type() == "axon");
+                std::vector<std::vector<BPolygon>> vvd;
 
-                vec_geom.clear();
-
-                while (node_it != node_end)
+                while (neurite_it != neurite_end)
                 {
-                    cascading_union(node_it->second, vec_geom, is_axon,
-                                    axon_buffer_radius);
-                    node_it++;
-                }
+                    auto node_it  = neurite_it->second->nodes_cbegin();
+                    auto node_end = neurite_it->second->nodes_cend();
 
-                for (auto gc : neurite_it->second->gc_range())
-                {
-                    cascading_union(gc.second, vec_geom, is_axon,
-                                    axon_buffer_radius);
+                    bool is_axon = (neurite_it->second->get_type() == "axon");
 
-                    if (add_gc)
+                    vec_geom.clear();
+
+                    while (node_it != node_end)
                     {
-                        // to nicely finish the neurite, we add a disk to mark
-                        // the growth cone position
-                        BPolygon disk = kernel().space_manager.make_disk(
-                            gc.second->get_position(),
-                            0.5 * gc.second->get_diameter());
-
-                        vec_geom.push_back(std::move(disk));
+                        cascading_union(node_it->second, vec_geom, is_axon,
+                                        axon_buffer_radius);
+                        node_it++;
                     }
-                }
 
-                if (is_axon)
-                {
-                    #pragma omp critical
+                    for (auto gc : neurite_it->second->gc_range())
                     {
-                        axons[gid] = std::move(vec_geom);
+                        cascading_union(gc.second, vec_geom, is_axon,
+                                        axon_buffer_radius);
+
+                        if (add_gc)
+                        {
+                            // to nicely finish the neurite, we add a disk to
+                            // mark the growth cone position
+                            BPolygon disk = kernel().space_manager.make_disk(
+                                gc.second->get_position(),
+                                0.5 * gc.second->get_diameter());
+
+                            vec_geom.push_back(std::move(disk));
+                        }
                     }
+
+                    if (is_axon)
+                    {
+                        #pragma omp critical
+                        {
+                            axons[gid] = std::move(vec_geom);
+                        }
+                    }
+                    else
+                    {
+                        vvd.push_back(std::move(vec_geom));
+                    }
+
+                    neurite_it++;
                 }
-                else
+                
+                #pragma omp critical
                 {
-                    vvd.push_back(std::move(vec_geom));
+                    dendrites[gid] = std::move(vvd);
                 }
 
-                neurite_it++;
+                BPoint soma = neuron->get_position();
+                somas[gid] = {soma.x(), soma.y(), neuron->get_soma_radius()};
             }
-            
-            #pragma omp critical
-            {
-                dendrites[gid] = std::move(vvd);
-            }
-
-            BPoint soma = neuron->get_position();
-            somas[gid] = {soma.x(), soma.y(), neuron->get_soma_radius()};
         }
+    }
+
+    if (flag_interrupt)
+    {
+        flag_interrupt = false;
+        throw std::runtime_error("Neurite polygon generation received user "
+                                 "interrupt.");
     }
 }
 
@@ -923,6 +942,8 @@ void get_geom_skeleton_(
     std::unordered_map<stype, std::vector<double>> &somas,
     double axon_buffer_radius, bool add_gc)
 {
+    std::signal(SIGINT, signal_handler);
+
     GEOSContextHandle_t ch = kernel().space_manager.get_context_handler();
     GEOSWKTReader *reader = GEOSWKTReader_create_r(ch);
     GEOSGeometry *geom_tmp, *geom_union;
@@ -1001,6 +1022,8 @@ void generate_synapses_(
     std::vector<double> &syn_x, std::vector<double> &syn_y,
     std::vector<double> &distances)
 {
+    std::signal(SIGINT, signal_handler);
+
     std::unordered_map<stype, std::vector<BPolygon>> ax;
     std::unordered_map<stype, std::vector<double>> somas;
     std::unordered_map<stype, std::vector<std::vector<BPolygon>>> dend;
@@ -1081,52 +1104,57 @@ void generate_synapses_(
 
                 for (stype target : postsyn_pop)
                 {
-                    if (source == target and not autapse_allowed)
+                    #pragma omp flush (flag_interrupt)
+                    if (!flag_interrupt)
                     {
-                        continue;
-                    }
-
-                    xt = somas[target][0];
-                    yt = somas[target][1];
-
-                    for (auto &vec : dend[target])
-                    {
-                        if (vec.size() > 0)
+                        if (source == target and not autapse_allowed)
                         {
-                            tp = vec[0];
+                            continue;
+                        }
 
-                            mp.clear();
+                        xt = somas[target][0];
+                        yt = somas[target][1];
 
-                            bg::intersection(sp, tp, mp);
-
-                            for (BPolygon p : mp)
+                        for (auto &vec : dend[target])
+                        {
+                            if (vec.size() > 0)
                             {
-                                total =
-                                    bg::area(p) * density * connection_proba;
+                                tp = vec[0];
 
-                                num_syn = total;
+                                mp.clear();
 
-                                if ((total - num_syn) < uniform(*(rng.get())))
+                                bg::intersection(sp, tp, mp);
+
+                                for (BPolygon p : mp)
                                 {
-                                    num_syn++;
-                                }
+                                    total = bg::area(p)
+                                            * density * connection_proba;
 
-                                if (num_syn)
-                                {
-                                    nsyn.push_back(num_syn);
-                                    src.push_back(source);
-                                    tgt.push_back(target);
-                                    // dendrite; @todo
-                                    bg::centroid(p, centroid);
-                                    xc = centroid.x();
-                                    yc = centroid.y(); 
-                                    x.push_back(xc);
-                                    y.push_back(yc);
-                                    dist.push_back(
-                                        sqrt((xs - xc)*(xs - xc) +
-                                             (ys - yc)*(ys - yc))
-                                        + sqrt((xt - xc)*(xt - xc) +
-                                               (yt - yc)*(yt - yc)));
+                                    num_syn = total;
+
+                                    if ((total - num_syn)
+                                        < uniform(*(rng.get())))
+                                    {
+                                        num_syn++;
+                                    }
+
+                                    if (num_syn)
+                                    {
+                                        nsyn.push_back(num_syn);
+                                        src.push_back(source);
+                                        tgt.push_back(target);
+                                        // dendrite; @todo
+                                        bg::centroid(p, centroid);
+                                        xc = centroid.x();
+                                        yc = centroid.y(); 
+                                        x.push_back(xc);
+                                        y.push_back(yc);
+                                        dist.push_back(
+                                            sqrt((xs - xc)*(xs - xc) +
+                                                 (ys - yc)*(ys - yc))
+                                            + sqrt((xt - xc)*(xt - xc) +
+                                                   (yt - yc)*(yt - yc)));
+                                    }
                                 }
                             }
                         }
@@ -1146,7 +1174,12 @@ void generate_synapses_(
             syn_y.insert(syn_y.end(), y.begin(), y.end());
             distances.insert(distances.end(), dist.begin(), dist.end());
         }
+    }
 
+    if (flag_interrupt)
+    {
+        flag_interrupt = false;
+        throw std::runtime_error("Synapse generation received user interrupt.");
     }
 }
 
