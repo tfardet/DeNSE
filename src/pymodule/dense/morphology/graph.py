@@ -545,7 +545,7 @@ class SpatialNetwork(_BaseNetwork):
 
                 if exists:
                     if self.is_weighted():
-                        w = attributes["weight"][i]
+                        w = attributes["weight"][i]*unit_strength
                         self._weights[idx] += w
 
                     # weighted average for other attributes
@@ -562,7 +562,8 @@ class SpatialNetwork(_BaseNetwork):
                                 "Attribute '" + k + "' is required."
                 else:
                     if self.is_weighted():
-                        self._weights.append(attributes["weight"][i])
+                        self._weights.append(
+                            attributes["weight"][i]*unit_strength)
 
                     # tmp dict because attributes may be skipped
                     tmp_dict = {k: [] for k in self._attributes}
@@ -634,7 +635,7 @@ class SpatialNetwork(_BaseNetwork):
 
                     for k in final_attrs:
                         if k == "weight":
-                            final_attrs[k][j] += unit_strength
+                            final_attrs[k][j] += unit_strength*new_attrs[k][i]
                         else:
                             final_attrs[k][j] = \
                                 (m*final_attrs[k][j] + new_attrs[k][i])/(m + 1.)
@@ -644,13 +645,13 @@ class SpatialNetwork(_BaseNetwork):
 
                     for k in final_attrs:
                         if k == "weight":
-                            final_attrs[k].append(unit_strength)
+                            final_attrs[k].append(unit_strength*new_attrs[k][i])
                         else:
                             final_attrs[k].append(new_attrs[k][i])
 
-            new_attrs["multiplicity"] = np.ones(len(edge_list) - num_existing,
-                                                dtype=int)
-
             final_elist = list(edges.keys())
 
-            super(SpatialNetwork, self).new_edges(final_elist, final_attrs)
+            final_attrs["multiplicity"] = [multiplicity[e] for e in final_elist]
+
+            super(SpatialNetwork, self).new_edges(
+                final_elist, attributes=final_attrs)

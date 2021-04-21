@@ -85,8 +85,7 @@ neurite_params = {"axon": axon_params, "dendrite": dend_params}
 
 # create neurons
 n = ds.create_neurons(n=num_neurons, params=neuron_params,
-                      neurite_params=neurite_params,
-                      num_neurites=2)
+                      neurite_params=neurite_params, num_neurites=2)
 
 
 ''' Plot the initial state '''

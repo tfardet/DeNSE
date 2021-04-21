@@ -58,7 +58,7 @@ def test_2_interacting_neurons(monkeypatch):
     '''
     monkeypatch.setattr(plt, "show", mock_show)
     ds.reset_kernel()
-    exec(open(tuto + "/2_interacting-neurons.py").read())
+    exec(open(tuto + "/2_interacting-neurons.py").read(), locals())
 
 
 def test_3_space_embedded_neurons(monkeypatch):
@@ -67,7 +67,16 @@ def test_3_space_embedded_neurons(monkeypatch):
     '''
     monkeypatch.setattr(plt, "show", mock_show)
     ds.reset_kernel()
-    exec(open(tuto + "/3_space-embedding.py").read())
+    exec(open(tuto + "/3_space-embedding.py").read(), locals())
+
+
+def test_4_complex_neuron_params(monkeypatch):
+    '''
+    Run second example.
+    '''
+    monkeypatch.setattr(plt, "show", mock_show)
+    ds.reset_kernel()
+    exec(open(tuto + "/4_complex_neuron_params.py").read(), locals())
 
 
 def test_named_neurites():
@@ -75,7 +84,7 @@ def test_named_neurites():
     Run second example.
     '''
     ds.reset_kernel()
-    exec(open(tuto + "/named_neurites.py").read())
+    exec(open(tuto + "/named_neurites.py").read(), locals())
 
 
 if __name__ == "__main__":
@@ -88,4 +97,5 @@ if __name__ == "__main__":
     test_1_first_steps(mp)
     test_2_interacting_neurons(mp)
     test_3_space_embedded_neurons(mp)
+    test_4_complex_neuron_params(mp)
     test_named_neurites()

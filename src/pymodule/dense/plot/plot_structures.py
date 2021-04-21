@@ -197,6 +197,7 @@ def plot_neurons(gid=None, mode="sticks", show_nodes=False, show_active_gc=True,
 
     # plot the somas
     n = len(somas)
+
     radii = somas[:, 2] if soma_radius is None else np.repeat(soma_radius, n)
 
     if mode in ("sticks", "mixed"):
@@ -232,15 +233,17 @@ def plot_neurons(gid=None, mode="sticks", show_nodes=False, show_active_gc=True,
             yy = []
 
             for a in axons.values():
-                xmin, ymin, xmax, ymax = a.bounds
-                xx.extend((xmin, xmax))
-                yy.extend((ymin, ymax))
+                if not a.is_empty:
+                    xmin, ymin, xmax, ymax = a.bounds
+                    xx.extend((xmin, xmax))
+                    yy.extend((ymin, ymax))
 
             for vd in dendrites.values():
                 for d in vd:
-                    xmin, ymin, xmax, ymax = d.bounds
-                    xx.extend((xmin, xmax))
-                    yy.extend((ymin, ymax))
+                    if not d.is_empty:
+                        xmin, ymin, xmax, ymax = d.bounds
+                        xx.extend((xmin, xmax))
+                        yy.extend((ymin, ymax))
 
             _set_ax_lim(ax, xx, yy, offset=2*r_max)
 

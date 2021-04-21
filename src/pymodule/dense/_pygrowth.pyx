@@ -1886,6 +1886,7 @@ def _get_pyskeleton(gid, unsigned int resolution=10):
         SkelNeurite axons, dendrites, nodes, growth_cones
         vector[vector[double]] somas = [[], [], []]
         vector[stype] gids
+
     if gid is None:
         gids = get_neurons()
     elif isinstance(gid, (int, np.integer)):
@@ -1909,7 +1910,7 @@ def _get_pyskeleton(gid, unsigned int resolution=10):
     py_growth_cones = (growth_cones.first, growth_cones.second)
     py_nodes        = (nodes.first, nodes.second)
 
-    return somas, py_axons, py_dendrites, py_growth_cones, py_nodes
+    return py_somas, py_axons, py_dendrites, py_growth_cones, py_nodes
 
 
 def _get_geom_skeleton(gid, axon_buffer_radius=-1., add_gc=True):

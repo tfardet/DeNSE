@@ -915,14 +915,16 @@ void get_neurite_polygons(
 
                     neurite_it++;
                 }
+
+                BPoint soma = neuron->get_position();
                 
                 #pragma omp critical
                 {
                     dendrites[gid] = std::move(vvd);
-                }
 
-                BPoint soma = neuron->get_position();
-                somas[gid] = {soma.x(), soma.y(), neuron->get_soma_radius()};
+                    somas[gid] =
+                        {soma.x(), soma.y(), neuron->get_soma_radius()};
+                }
             }
         }
     }

@@ -23,8 +23,6 @@
 """ Testing network generation """
 
 import numpy as np
-import matplotlib
-matplotlib.use('Agg')
 
 import dense as ds
 from dense.units import *
@@ -37,50 +35,59 @@ def test_2neuron_network(plot=True):
     Most simple network of 2 neurons
     '''
     ds.reset_kernel()
-    ds.set_kernel_status("resolution", 10.*minute)
+    ds.set_kernel_status({
+        "resolution": 10.*minute,
+        "interactions": False
+    })
 
     num_neurons = 2
     positions   = [(0, 0), (20, -20)]*um
     params      = {
         "position": positions, "growth_cone_model": "run-and-tumble",
         "neurite_angles": [
-            {"axon": 90.*deg, "dendrite_1": 270.*deg},
-            {"axon": 180.*deg, "dendrite_1": 60.*deg},
+            {"axon": -90.*deg, "dendrite_1": 90.*deg},
+            {"axon": 0.*deg, "dendrite_1": 170.*deg, "dendrite_2": -170.*deg},
         ],
     }
 
-    neurons = ds.create_neurons(num_neurons, params, num_neurites=2)
+    neurons = ds.create_neurons(num_neurons, params, num_neurites=[2, 3])
 
     ds.simulate(0.45*day)
+
+    if plot:
+        ds.plot.plot_neurons(neurons, show_neuron_id=True)
 
     net = ds.morphology.generate_network(method="spines",
                                          spine_density=1./um**2,
                                          max_spine_length=4.*um)
 
-    if plot:
-        ds.plot.plot_neurons(neurons, show_neuron_id=True)
-
     assert net.node_nb() == num_neurons, \
         "Incorrect node number in the network"
 
-    assert net.edge_nb() == 1, \
-        "Incorrect number of edges in the network"
+    assert net.edge_nb() == 1, "Incorrect number of edges in the network"
 
-    assert net.get_edge_attributes(name="weight")[0] > 1, \
-        "Incorrect weight"
+    assert net.get_edge_attributes(name="multiplicity")[0] == 2, \
+        "Incorrect multiplicity"
+
+    w = net.get_edge_attributes(name="weight")[0]
+
+    assert w > 1, "Incorrect weight"
+
+    net = ds.morphology.generate_network(
+        method="spines", spine_density=1./um**2, max_spine_length=4.*um,
+        default_synaptic_strength=2.)
+
+    assert net.get_weights()[0] in {2*w, 2*(w-1)}, "Incorrect double weight"
 
     net = ds.morphology.generate_network(
         method="intersections", connection_probability=1.,
         default_synaptic_strength=2.)
 
-    assert net.node_nb() == num_neurons, \
-        "Incorrect node number in the network"
+    assert net.node_nb() == num_neurons, "Incorrect node number in the network"
 
-    assert net.edge_nb() == 1, \
-        "Incorrect number of edges in the network"
+    assert net.edge_nb() == 1, "Incorrect number of edges in the network"
 
-    assert net.get_edge_attributes(name="weight")[0] == 2, \
-        "Incorrect weight"
+    assert net.get_edge_attributes(name="weight")[0] == 4, "Incorrect weight"
 
 
 def test_network(plot=False):

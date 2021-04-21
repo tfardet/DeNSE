@@ -44,68 +44,68 @@ def mock_show():
     pass
 
 
-def test_1_bipolar_cell(monkeypatch):
+def test_bipolar_cell(monkeypatch):
     '''
     Run first example.
     '''
     monkeypatch.setattr(plt, "show", mock_show)
     ds.reset_kernel()
-    exec(open(neuron_models + "/bipolar_cell.py").read())
+    exec(open(neuron_models + "/bipolar_cell.py").read(), locals())
 
 
-def test_2_chandelier_cell(monkeypatch):
+def test_chandelier_cell(monkeypatch):
     '''
     Run first example.
     '''
     monkeypatch.setattr(plt, "show", mock_show)
     ds.reset_kernel()
-    exec(open(neuron_models + "/chandelier-cell.py").read())
+    exec(open(neuron_models + "/chandelier-cell.py").read(), locals())
 
 
-def test_3_granule_cell(monkeypatch):
+def test_granule_cell(monkeypatch):
     '''
     Run first example.
     '''
     monkeypatch.setattr(plt, "show", mock_show)
     ds.reset_kernel()
-    exec(open(neuron_models + "/granule_cell.py").read())
+    exec(open(neuron_models + "/granule_cell.py").read(), locals())
 
 
-def test_4_purkinje(monkeypatch):
+def test_purkinje(monkeypatch):
     '''
     Run first example.
     '''
     monkeypatch.setattr(plt, "show", mock_show)
     ds.reset_kernel()
-    exec(open(neuron_models + "/purkinje.py").read())
+    exec(open(neuron_models + "/purkinje.py").read(), locals())
 
 
-def test_5_pyramidal(monkeypatch):
+def test_pyramidal(monkeypatch):
     '''
     Run first example.
     '''
     monkeypatch.setattr(plt, "show", mock_show)
     ds.reset_kernel()
-    exec(open(neuron_models + "/pyramidal_cell.py").read())
+    exec(open(neuron_models + "/pyramidal_cell.py").read(), locals())
 
 
-def test_6_starbust_amacrine_cell(monkeypatch):
+def test_starbust_amacrine_cell(monkeypatch):
     '''
     Run first example.
     '''
     monkeypatch.setattr(plt, "show", mock_show)
     ds.reset_kernel()
-    exec(open(neuron_models + "/starbust_amacrine_cell.py").read())
+    exec(open(neuron_models + "/starbust_amacrine_cell.py").read(), locals())
 
 
-def test_7_several_step_growth(monkeypatch):
+def test_several_step_growth(monkeypatch):
     '''
     Run first example.
     '''
     monkeypatch.setattr(plt, "show", mock_show)
     ds.reset_kernel()
     exec(open(branching_dir +
-              "/several_step_growth_and_on_and_off_branching.py").read())
+         "/several_step_growth_and_on_and_off_branching.py").read(), locals())
 
 
 if __name__ == "__main__":
@@ -115,10 +115,10 @@ if __name__ == "__main__":
 
     mp = mptch()
 
-    # test_1_bipolar_cell(mp)
-    test_2_chandelier_cell(mp)
-    # test_3_granule_cell(mp)
-    # test_4_purkinje(mp)
-    # test_5_pyramidal(mp)
-    # test_6_starbust_amacrine_cell(mp)
-    # test_7_several_step_growth(mp)
+    test_bipolar_cell(mp)
+    test_chandelier_cell(mp)
+    test_granule_cell(mp)
+    test_purkinje(mp)
+    test_pyramidal(mp)
+    test_starbust_amacrine_cell(mp)
+    test_several_step_growth(mp)
