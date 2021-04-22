@@ -125,11 +125,7 @@ void SpaceManager::finalize()
     interactions_ = true;
 
     // remove synapses
-    known_synaptic_sites_.clear();
-    old_potential_synapse_crossing_.clear();
-    new_potential_synapse_crossing_.clear();
-    old_potential_synapse_near_.clear();
-    new_potential_synapse_near_.clear();
+    known_interactions_.clear();
 
     GEOS_finish_r(context_handler_);
 }
@@ -867,24 +863,24 @@ bool SpaceManager::sense(std::vector<double> &directions_weights,
                 other_segment = std::get<3>(info);
 
                 // store information about potential synapses
-                //~ if (neurite_name == "axon")
-                //~ {
-                    //~ if (other_neurite != "axon")
-                    //~ {
-                        //~ add_putative_synapse(
-                            //~ omp_id, neuron_id, neurite_name, other_neuron,
-                            //~ other_neurite);
-                    //~ }
-                //~ }
-                //~ else
-                //~ {
-                    //~ if (other_neurite == "axon")
-                    //~ {
-                        //~ add_putative_synapse(
-                            //~ omp_id, other_neuron, other_neurite, neuron_id,
-                            //~ neurite_name);
-                    //~ }
-                //~ }
+                if (neurite_name == "axon")
+                {
+                    if (other_neurite != "axon")
+                    {
+                        add_putative_synapse(
+                            omp_id, neuron_id, neurite_name, other_neuron,
+                            other_neurite);
+                    }
+                }
+                else
+                {
+                    if (other_neurite == "axon")
+                    {
+                        add_putative_synapse(
+                            omp_id, other_neuron, other_neurite, neuron_id,
+                            neurite_name);
+                    }
+                }
 
                 // check intersections
                 bool other_intersects = false;
@@ -1281,401 +1277,46 @@ void SpaceManager::check_accessibility(std::vector<double> &directions_weights,
 }
 
 
+/**
+ * Storing putative synaptic sites.
+ *
+ * For now this function only stores interacting neurons.
+ */
 void SpaceManager::add_putative_synapse(
     int omp_id, stype other_neuron, const std::string& other_neurite,
     stype neuron_id, const std::string& neurite_name)
 {
+    if (intrcts_tmp_[omp_id].find(neuron_id) == intrcts_tmp_[omp_id].end())
+    {
+        intrcts_tmp_[omp_id][neuron_id] = {other_neuron};
+    }
+    else
+    {
+        intrcts_tmp_[omp_id][neuron_id].insert(other_neuron);
+    }
 }
 
 
-void SpaceManager::check_synaptic_site(const BPoint &position, double distance,
-                                       stype neuron_id,
-                                       const std::string &neurite_name,
-                                       stype other_neuron,
-                                       const std::string &other_neurite,
-                                       BPolygonPtr poly)
+void SpaceManager::get_interactions(interact_map map)
 {
-    if (distance < max_syn_distance_)
+    for (auto &data : intrcts_tmp_)
     {
-        if (neurite_name == "axon" or other_neurite == "axon")
+        for (auto &pair : data)
         {
-#pragma omp single
-            {
-                if (not bg::within(position, known_synaptic_sites_))
-                {
-                    if (bg::within(position, *(poly.get())))
-                    {
-                        new_potential_synapse_crossing_.push_back(position);
-                    }
-                    else
-                    {
-                        new_potential_synapse_near_.push_back(position);
-                    }
-
-                    double x = position.x();
-                    double y = position.y();
-
-                    // make box centered on Point and of correct size
-                    BPolygon box;
-                    box.outer().push_back(
-                        BPoint(x - max_syn_distance_, y - max_syn_distance_));
-                    box.outer().push_back(
-                        BPoint(x - max_syn_distance_, y + max_syn_distance_));
-                    box.outer().push_back(
-                        BPoint(x + max_syn_distance_, y + max_syn_distance_));
-                    box.outer().push_back(
-                        BPoint(x + max_syn_distance_, y - max_syn_distance_));
-                    box.outer().push_back(
-                        BPoint(x - max_syn_distance_, y - max_syn_distance_));
-
-                    known_synaptic_sites_.push_back(box);
-                }
-            }
+            known_interactions_[pair.first].insert(
+                pair.second.begin(), pair.second.end());
         }
+
+        data.clear();
     }
+
+    map = known_interactions_;
 }
 
 
 /*
- * Test all crossing to generate synapses.
+ * Environment-related functions
  */
-void SpaceManager::generate_synapses_crossings(
-    double synapse_density, bool only_new_syn, bool autapse_allowed,
-    const std::set<stype> &presyn_pop, const std::set<stype> &postsyn_pop,
-    std::vector<stype> &presyn_neurons, std::vector<stype> &postsyn_neurons,
-    std::vector<std::string> &presyn_neurites,
-    std::vector<std::string> &postsyn_neurites,
-    std::vector<stype> &presyn_nodes, std::vector<stype> &postsyn_nodes,
-    std::vector<stype> &presyn_segments, std::vector<stype> &postsyn_segments,
-    std::vector<double> &pre_syn_x, std::vector<double> &pre_syn_y)
-{
-    // range of points to test
-    std::vector<BPoint> &old_vec = old_potential_synapse_crossing_;
-
-    if (only_new_syn)
-    {
-        old_vec = std::vector<BPoint>();
-    }
-
-    point_range points =
-        boost::range::join(new_potential_synapse_crossing_, old_vec);
-
-#pragma omp parallel
-    {
-        int omp_id = kernel().parallelism_manager.get_thread_local_id();
-        mtPtr rng  = kernel().rng_manager.get_rng(omp_id);
-
-        // store the axons and dendrites in a map
-        std::unordered_map<std::string, std::vector<stype>> ntypes(
-            {{"axon", {}}, {"other", {}}});
-
-        ObjectInfo segment_info, axon_info, other_info;
-        BMultiPolygon intersection, covered_range;
-        std::vector<ObjectInfo> neighbors_info;
-        stype presyn_id, postsyn_id;
-        bool check_syn, valid_syn;
-        double tmp, area, x, y;
-        BPoint centroid, p;
-        int num_synapses;
-
-        for (stype k = 0; k < points.size(); k++)
-        {
-            p = points[k];
-
-            // get the properties of the neighboring geometries
-            neighbors_info.clear();
-            get_objects_in_range(p, max_syn_distance_, neighbors_info);
-
-            BPolygonPtr axon_poly, other_poly;
-            ntypes.clear();
-
-            for (stype i = 0; i < neighbors_info.size(); i++)
-            {
-                segment_info = neighbors_info[i];
-
-                if (std::get<1>(segment_info) == "axon")
-                {
-                    ntypes["axon"].push_back(i);
-                }
-                else
-                {
-                    ntypes["other"].push_back(i);
-                }
-            }
-
-            if (ntypes["other"].size() > 0 and ntypes["axon"].size() > 0)
-            {
-                for (stype i : ntypes["axon"])
-                {
-                    axon_info = neighbors_info[i];
-
-                    for (stype j : ntypes["other"])
-                    {
-                        // clear intersection
-                        intersection.clear();
-
-                        other_info = neighbors_info[j];
-
-                        presyn_id  = std::get<0>(axon_info);
-                        postsyn_id = std::get<0>(other_info);
-
-                        check_syn =
-                            (presyn_pop.find(presyn_id) != presyn_pop.end()) and
-                            (postsyn_pop.find(presyn_id) != postsyn_pop.end());
-
-                        valid_syn = presyn_id != postsyn_id or autapse_allowed;
-
-                        if (check_syn and valid_syn)
-                        {
-                            // these two are eligible for synapse creation,
-                            // test for the existence of a synapse
-                            BPolygonPtr axon_segment  = map_geom_[axon_info];
-                            BPolygonPtr other_segment = map_geom_[other_info];
-
-                            if (bg::intersects(*(axon_segment.get()),
-                                               *(other_segment.get())))
-                            {
-                                bg::intersection(*(axon_segment.get()),
-                                                 *(other_segment.get()),
-                                                 intersection);
-
-                                area = bg::area(intersection);
-
-                                tmp          = area * synapse_density;
-                                num_synapses = tmp;
-
-                                if (tmp - num_synapses > uniform_(*(rng.get())))
-                                {
-                                    num_synapses += 1;
-                                }
-
-                                for (stype s = 0; s < num_synapses; s++)
-                                {
-                                    // @todo get a random point in the
-                                    // intersection
-                                    bg::centroid(intersection, centroid);
-
-                                    pre_syn_x.push_back(centroid.x());
-                                    pre_syn_y.push_back(centroid.y());
-
-                                    presyn_neurons.push_back(presyn_id);
-                                    postsyn_neurons.push_back(postsyn_id);
-
-                                    presyn_neurites.push_back(
-                                        std::get<1>(axon_info));
-                                    presyn_nodes.push_back(
-                                        std::get<2>(axon_info));
-                                    presyn_segments.push_back(
-                                        std::get<3>(axon_info));
-
-                                    postsyn_neurites.push_back(
-                                        std::get<1>(other_info));
-                                    postsyn_nodes.push_back(
-                                        std::get<2>(other_info));
-                                    postsyn_segments.push_back(
-                                        std::get<3>(other_info));
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // move the new potential sites to the old container and clear it
-
-    old_potential_synapse_crossing_.insert(
-        old_potential_synapse_crossing_.end(),
-        new_potential_synapse_crossing_.begin(),
-        new_potential_synapse_crossing_.end());
-
-    new_potential_synapse_crossing_.clear();
-}
-
-
-void SpaceManager::generate_synapses_all(
-    double spine_density, bool only_new_syn, bool autapse_allowed,
-    const std::set<stype> &presyn_pop, const std::set<stype> &postsyn_pop,
-    std::vector<stype> &presyn_neurons, std::vector<stype> &postsyn_neurons,
-    std::vector<std::string> &presyn_neurites,
-    std::vector<std::string> &postsyn_neurites,
-    std::vector<stype> &presyn_nodes, std::vector<stype> &postsyn_nodes,
-    std::vector<stype> &presyn_segments, std::vector<stype> &postsyn_segments,
-    std::vector<double> &pre_syn_x, std::vector<double> &pre_syn_y,
-    std::vector<double> &post_syn_x, std::vector<double> &post_syn_y)
-{
-    // range of points to test
-    std::vector<BPoint> &old_vec_cross = old_potential_synapse_crossing_;
-    std::vector<BPoint> &old_vec_near  = old_potential_synapse_near_;
-
-    if (only_new_syn)
-    {
-        old_vec_near  = std::vector<BPoint>();
-        old_vec_cross = std::vector<BPoint>();
-    }
-
-    point_range points_cross =
-        boost::range::join(new_potential_synapse_crossing_, old_vec_cross);
-
-    point_range points_near =
-        boost::range::join(new_potential_synapse_near_, old_vec_near);
-
-    auto all_points = boost::range::join(points_cross, points_near);
-
-#pragma omp parallel
-    {
-        int omp_id = kernel().parallelism_manager.get_thread_local_id();
-        mtPtr rng  = kernel().rng_manager.get_rng(omp_id);
-
-        // store the axons and dendrites in a map
-        std::unordered_map<std::string, std::vector<stype>> ntypes(
-            {{"axon", {}}, {"other", {}}});
-
-        ObjectInfo segment_info, axon_info, other_info;
-        BMultiPolygon axon_buffer, other_buffer;
-        std::vector<ObjectInfo> neighbors_info;
-        stype presyn_id, postsyn_id;
-        BMultiPolygon intersection;
-        bool check_syn, valid_syn;
-        BPoint centroid, p;
-        int num_synapses;
-        double tmp, area;
-
-        for (stype k = 0; k < all_points.size(); k++)
-        {
-            p = all_points[k];
-
-            // get the properties of the neighboring geometries
-            neighbors_info.clear();
-            get_objects_in_range(p, max_syn_distance_, neighbors_info);
-
-            BPolygonPtr axon_poly, other_poly;
-            ntypes.clear();
-
-            for (stype i = 0; i < neighbors_info.size(); i++)
-            {
-                segment_info = neighbors_info[i];
-
-                if (std::get<1>(segment_info) == "axon")
-                {
-                    ntypes["axon"].push_back(i);
-                }
-                else
-                {
-                    ntypes["other"].push_back(i);
-                }
-            }
-
-            if (ntypes["other"].size() > 0 and ntypes["axon"].size() > 0)
-            {
-                for (stype i : ntypes["axon"])
-                {
-                    axon_info = neighbors_info[i];
-
-                    for (stype j : ntypes["other"])
-                    {
-                        other_info = neighbors_info[j];
-
-                        presyn_id  = std::get<0>(axon_info);
-                        postsyn_id = std::get<0>(other_info);
-
-                        check_syn =
-                            (presyn_pop.find(presyn_id) != presyn_pop.end()) and
-                            (postsyn_pop.find(presyn_id) != postsyn_pop.end());
-
-                        valid_syn = presyn_id != postsyn_id or autapse_allowed;
-
-                        if (check_syn and valid_syn)
-                        {
-                            // these two are eligible for synapse creation, test
-                            // for the existence of a synapse
-                            BPolygonPtr axon_segment  = map_geom_[axon_info];
-                            BPolygonPtr other_segment = map_geom_[other_info];
-
-                            // make the circle with a buffer
-                            bg::strategy::buffer::distance_symmetric<double>
-                                distance_strategy(0.5 * max_syn_distance_);
-
-                            bg::buffer(*(axon_segment.get()), axon_buffer,
-                                       distance_strategy, side_strategy_,
-                                       join_strategy_, end_strategy_,
-                                       circle_strategy_);
-
-                            bg::buffer(*(other_segment.get()), other_buffer,
-                                       distance_strategy, side_strategy_,
-                                       join_strategy_, end_strategy_,
-                                       circle_strategy_);
-
-                            if (bg::intersects(axon_buffer[0], other_buffer[0]))
-                            {
-                                bg::intersection(axon_buffer[0],
-                                                 other_buffer[0], intersection);
-
-                                area = bg::area(intersection);
-
-                                tmp          = area * spine_density;
-                                num_synapses = tmp;
-
-                                if (tmp - num_synapses > uniform_(*(rng.get())))
-                                {
-                                    num_synapses += 1;
-                                }
-
-                                for (stype s = 0; s < num_synapses; s++)
-                                {
-                                    // @todo get a random point in along the
-                                    // segments
-                                    bg::centroid(*(axon_segment.get()),
-                                                 centroid);
-                                    pre_syn_x.push_back(centroid.x());
-                                    pre_syn_y.push_back(centroid.y());
-
-                                    bg::centroid(*(other_segment.get()),
-                                                 centroid);
-                                    post_syn_x.push_back(centroid.x());
-                                    post_syn_y.push_back(centroid.y());
-
-                                    presyn_neurons.push_back(presyn_id);
-                                    postsyn_neurons.push_back(postsyn_id);
-
-                                    presyn_neurites.push_back(
-                                        std::get<1>(axon_info));
-                                    presyn_nodes.push_back(
-                                        std::get<2>(axon_info));
-                                    presyn_segments.push_back(
-                                        std::get<3>(axon_info));
-
-                                    postsyn_neurites.push_back(
-                                        std::get<1>(axon_info));
-                                    postsyn_nodes.push_back(
-                                        std::get<2>(axon_info));
-                                    postsyn_segments.push_back(
-                                        std::get<3>(axon_info));
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // move the new potential sites to the old container and clear it
-
-    old_potential_synapse_crossing_.insert(
-        old_potential_synapse_crossing_.end(),
-        new_potential_synapse_crossing_.begin(),
-        new_potential_synapse_crossing_.end());
-
-    new_potential_synapse_crossing_.clear();
-
-    old_potential_synapse_near_.insert(old_potential_synapse_near_.end(),
-                                       new_potential_synapse_near_.begin(),
-                                       new_potential_synapse_near_.end());
-
-    new_potential_synapse_near_.clear();
-}
 
 
 bool SpaceManager::env_contains(const BPoint &point) const
@@ -2127,11 +1768,6 @@ void SpaceManager::get_environment(
         }
 
         // set properties
-
-        if (a.second == nullptr)
-        {
-            printf("trouble ahead (second)\n");
-        }
         heights.push_back(a.second->get_height());
         names.push_back(a.second->get_name());
 
@@ -2226,7 +1862,24 @@ void SpaceManager::get_area_properties(
 
 void SpaceManager::set_status(const statusMap &config)
 {
-    get_param(config, names::interactions, interactions_);
+    bool present, old_intrct(interactions_), new_intrct;
+
+    present = get_param(config, names::interactions, new_intrct);
+
+    if (present)
+    {
+        if (old_intrct != new_intrct)
+        {
+            if (kernel().simulation_manager->get_time() != Time())
+            {
+                throw std::invalid_argument("Cannot change `" +
+                                            names::interactions + "` after "
+                                            "simulation start.");
+            }
+
+            interactions_ = new_intrct;
+        }
+    }
 
     double max_syn_dist(max_syn_distance_);
     get_param(config, names::max_synaptic_distance, max_syn_dist);
@@ -2262,6 +1915,8 @@ void SpaceManager::num_threads_changed(int num_omp)
 {
     geom_add_buffer_ = std::vector<space_tree_map>(num_omp);
     box_buffer_      = std::vector<std::vector<box_tree_tuple>>(num_omp);
+    intrcts_tmp_     = std::vector<
+        std::unordered_map<stype, std::unordered_set<stype>>>(num_omp);
 }
 
 

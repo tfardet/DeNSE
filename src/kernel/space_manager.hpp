@@ -30,6 +30,7 @@
 // C++ include
 #include <memory>
 #include <set>
+#include <unordered_set>
 #include <unordered_map>
 #include <vector>
 
@@ -48,6 +49,8 @@ namespace growth
 
 // forward declare spatial classes
 class Environment;
+
+typedef std::unordered_map<stype, std::unordered_set<stype>> interact_map;
 
 
 class SpaceManager : public ManagerInterface
@@ -125,34 +128,7 @@ class SpaceManager : public ManagerInterface
         int omp_id, stype other_neuron, const std::string& other_neurite,
         stype neuron_id, const std::string& neurite_name);
 
-    void check_synaptic_site(const BPoint &position, double distance,
-                             stype neuron_id, const std::string &neurite_name,
-                             stype other_neuron,
-                             const std::string &other_neurite,
-                             BPolygonPtr poly);
-
-    void generate_synapses_crossings(
-        double synapse_density, bool only_new_syn, bool autapse_allowed,
-        const std::set<stype> &presyn_pop, const std::set<stype> &postsyn_pop,
-        std::vector<stype> &presyn_neurons, std::vector<stype> &postsyn_neurons,
-        std::vector<std::string> &presyn_neurites,
-        std::vector<std::string> &postsyn_neurites,
-        std::vector<stype> &presyn_nodes, std::vector<stype> &postsyn_nodes,
-        std::vector<stype> &presyn_segments,
-        std::vector<stype> &postsyn_segments, std::vector<double> &pre_syn_x,
-        std::vector<double> &pre_syn_y);
-
-    void generate_synapses_all(
-        double spine_density, bool only_new_syn, bool autapse_allowed,
-        const std::set<stype> &presyn_pop, const std::set<stype> &postsyn_pop,
-        std::vector<stype> &presyn_neurons, std::vector<stype> &postsyn_neurons,
-        std::vector<std::string> &presyn_neurites,
-        std::vector<std::string> &postsyn_neurites,
-        std::vector<stype> &presyn_nodes, std::vector<stype> &postsyn_nodes,
-        std::vector<stype> &presyn_segments,
-        std::vector<stype> &postsyn_segments, std::vector<double> &pre_syn_x,
-        std::vector<double> &pre_syn_y, std::vector<double> &post_syn_x,
-        std::vector<double> &post_syn_y);
+    void get_interactions(interact_map map);
 
     void set_environment(
         GEOSGeom environment, const std::vector<GEOSGeom> &areas,
@@ -211,12 +187,9 @@ class SpaceManager : public ManagerInterface
     std::vector<std::vector<box_tree_tuple>> box_buffer_;
     // potential synaptic sites
     double max_syn_distance_;
-    BMultiPolygon known_synaptic_sites_;
+    interact_map known_interactions_;
+    std::vector<interact_map> intrcts_tmp_;
     std::uniform_real_distribution<double> uniform_;
-    std::vector<BPoint> old_potential_synapse_crossing_;
-    std::vector<BPoint> new_potential_synapse_crossing_;
-    std::vector<BPoint> old_potential_synapse_near_;
-    std::vector<BPoint> new_potential_synapse_near_;
 };
 
 

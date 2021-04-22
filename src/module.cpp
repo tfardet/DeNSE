@@ -30,6 +30,7 @@
 #include <stdexcept>
 #include <random>
 #include <csignal>
+#include <unordered_set>
 
 #include <boost/range/adaptor/strided.hpp>
 
@@ -54,6 +55,7 @@ namespace ba = boost::adaptors;
 const int INVALID_AXON_NAME(1);
 
 bool flag_interrupt = false;
+
 
 void signal_handler(int signal)
 {
@@ -1030,10 +1032,14 @@ void generate_synapses_(
     std::unordered_map<stype, std::vector<double>> somas;
     std::unordered_map<stype, std::vector<std::vector<BPolygon>>> dend;
 
-    bool add_gc = false;
+    bool add_gc(false), intrct_on(kernel().space_manager.interactions_on());
 
     // get boost polygons in parallel
     get_neurite_polygons(all_gids, ax, dend, somas, axon_buffer_radius, add_gc);
+
+    std::unordered_map<stype, std::unordered_set<stype>> interactions;
+
+    kernel().space_manager.get_interactions(interactions);
 
 #pragma omp parallel
     {
@@ -1054,6 +1060,17 @@ void generate_synapses_(
         std::uniform_real_distribution<double> uniform;
 
         mtPtr rng = kernel().rng_manager.get_rng(omp_id);
+
+        // prepare target vector
+        std::unordered_set<stype> known_targets;
+        std::vector<stype> targets;
+
+        if (not intrct_on)
+        {
+            // if interactions between neurons are off, it defaults to
+            // postsyn_pop
+            targets = postsyn_pop;
+        }
 
         // merge all polygons from each neurite
         #pragma omp for
@@ -1100,11 +1117,27 @@ void generate_synapses_(
             xs = somas[source][0];
             ys = somas[source][1];
 
+            known_targets = interactions[source];
+
             if (ax[source].size() > 0)
             {
                 sp = ax[source][0];
 
-                for (stype target : postsyn_pop)
+                // get gid-specific targets if interactions are on
+                if (intrct_on)
+                {
+                    targets.clear();
+
+                    for (stype n : postsyn_pop)
+                    {
+                        if (known_targets.find(n) != known_targets.end())
+                        {
+                            targets.push_back(n);
+                        }
+                    }
+                }
+
+                for (stype target : targets)
                 {
                     #pragma omp flush (flag_interrupt)
                     if (!flag_interrupt)
