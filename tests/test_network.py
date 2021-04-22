@@ -89,6 +89,9 @@ def test_2neuron_network(plot=True):
 
     assert net.get_edge_attributes(name="weight")[0] == 4, "Incorrect weight"
 
+    assert net.get_edge_attributes(name="multiplicity")[0] == 2, \
+        "Incorrect edge multiplicity"
+
 
 def test_network(plot=False):
     '''
