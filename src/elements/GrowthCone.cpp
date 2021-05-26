@@ -904,24 +904,29 @@ void GrowthCone::make_move(const std::vector<double> &directions_weights,
                         }
                         catch (...)
                         {
-                            printf("module %f - delta angle: %f - old angle %f - "
-                                   "new angle %f on OMP %i\n",
+                            printf("module %f - delta angle: %f - old angle %f "
+                                   "- new angle %f on OMP %i\n",
                                    move_.module, delta_angle_, old_angle_,
                                    new_angle, omp_id);
 
-                            std::cout << "p " << bg::wkt(p) << std::endl;
-
                             BPoint p2 = branch_->get_last_xy();
-                            std::cout << "p2 " << bg::wkt(p2) << std::endl;
+
+                            std::cout << "p - p2 - (p1)" << std::endl
+                                      << std::setprecision(12)
+                                      << bg::wkt(p) << std::endl
+                                      << bg::wkt(p2) << std::endl;
 
                             if (branch_->size() > 1)
                             {
                                 BPoint p1 = branch_->xy_at(branch_->size() - 2);
-                                std::cout << "p1 " << bg::wkt(p1) << std::endl;
+                                std::cout << std::setprecision(12)
+                                          << bg::wkt(p1) << std::endl;
 
-                                double old_angle =
-                                    std::atan2(p2.y() - p1.y(), p2.x() - p1.x());
-                                printf("old angle 2: %f on OMP %i\n", old_angle, omp_id);
+                                double old_angle = std::atan2(
+                                    p2.y() - p1.y(), p2.x() - p1.x());
+    
+                                printf("old angle 2: %f on OMP %i\n", old_angle,
+                                       omp_id);
                             }
 
                             std::throw_with_nested(std::runtime_error(

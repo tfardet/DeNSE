@@ -355,7 +355,7 @@ void Branching::update_splitting_cones(TNodePtr branching_cone,
     int omp_id = kernel().parallelism_manager.get_thread_local_id();
 
     // remove last segment (if it was added)
-    if (old_cone->cumul_dist_ > 0)
+    if (old_cone->cumul_dist_ == 0)
     {
         // remove last point (previous position) from old branch
         BPolygonPtr last_seg = branch->get_last_segment();
@@ -402,6 +402,9 @@ void Branching::update_splitting_cones(TNodePtr branching_cone,
         }
         catch (...)
         {
+            printf("error adding point - %f\n", old_cone->cumul_dist_);
+            std::cout << bg::wkt(tmp) << std::endl << bg::wkt(pos2) << std::endl;
+            std::cout << bg::wkt(lp1) << std::endl << bg::wkt(lp2) << std::endl;
             std::throw_with_nested(std::runtime_error(
                 "Passed from `Branching::update_splitting_cones` "
                 "(second cone)."));

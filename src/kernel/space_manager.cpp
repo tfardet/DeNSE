@@ -390,10 +390,10 @@ void SpaceManager::add_object(const BPoint &start, const BPoint &stop,
                             << b->size() << " segments and length "
                             << b->get_length() << " while step length "
                             << "is " << std::to_string(length) << std::endl;
-                        std::cout << bg::wkt(*(poly.get())) << std::endl;
-                        std::cout << bg::wkt(*(last_segment.get()))
-                                  << std::endl;
-                        std::cout << bg::wkt(stop) << std::endl;
+                        std::cout << std::setprecision(12)
+                                  << bg::wkt(*(poly.get())) << std::endl
+                                  << bg::wkt(*(last_segment.get())) << std::endl
+                                  << bg::wkt(stop) << std::endl;
                         printf(
                             "At %f min\n",
                             kernel().simulation_manager->get_current_minutes());

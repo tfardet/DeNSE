@@ -1087,7 +1087,10 @@ void generate_synapses_(
                 mp2.clear();
             }
 
-            ax[gid][0] = mp.back();
+            #pragma omp critical
+            {
+                ax[gid][0] = mp.back();
+            }
         }
 
         #pragma omp for
@@ -1106,7 +1109,10 @@ void generate_synapses_(
                     mp2.clear();
                 }
 
-                vec[0] = mp.back();
+                #pragma omp critical
+                {
+                    vec[0] = mp.back();
+                }
             }
         }
 
