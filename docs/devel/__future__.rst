@@ -8,6 +8,14 @@ What to implement:
 * error with cst_mem_nm
 
 
+Conda recipe
+------------
+
+https://conda-forge.org/docs/maintainer/adding_pkgs.html
+https://github.com/conda-forge/staged-recipes
+https://github.com/conda-forge/nest-simulator-feedstock
+
+
 Including reference formats and tools
 -------------------------------------
 

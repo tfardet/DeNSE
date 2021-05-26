@@ -128,7 +128,7 @@ class SpaceManager : public ManagerInterface
         int omp_id, stype other_neuron, const std::string& other_neurite,
         stype neuron_id, const std::string& neurite_name);
 
-    void get_interactions(interact_map map);
+    void get_interactions(interact_map& map);
 
     void set_environment(
         GEOSGeom environment, const std::vector<GEOSGeom> &areas,

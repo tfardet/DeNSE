@@ -1297,7 +1297,7 @@ void SpaceManager::add_putative_synapse(
 }
 
 
-void SpaceManager::get_interactions(interact_map map)
+void SpaceManager::get_interactions(interact_map& map)
 {
     for (auto &data : intrcts_tmp_)
     {
