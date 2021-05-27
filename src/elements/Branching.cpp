@@ -319,6 +319,13 @@ void Branching::update_splitting_cones(TNodePtr branching_cone,
         double inv_norm =
             1. / sqrt(l_vec.x() * l_vec.x() + l_vec.y() * l_vec.y());
 
+        if (std::isnan(inv_norm))
+        {
+            printf("nan norm\n");
+            std::cout << bg::wkt(l_vec) << std::endl << bg::wkt(pos)
+                      << std::endl << bg::wkt(old_pos) << std::endl;
+        }
+
         double radius = 0.5*old_cone->get_diameter();
 
         BPoint r_vec(-radius * l_vec.y() * inv_norm,
