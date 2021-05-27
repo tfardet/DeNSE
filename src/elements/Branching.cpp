@@ -402,7 +402,9 @@ void Branching::update_splitting_cones(TNodePtr branching_cone,
         }
         catch (...)
         {
-            printf("error adding point - %f\n", old_cone->cumul_dist_);
+            printf("error adding point - %f - %lu\n", old_cone->cumul_dist_,
+                   branch->size());
+
             std::cout << bg::wkt(tmp) << std::endl << bg::wkt(pos2) << std::endl;
             std::cout << bg::wkt(lp1) << std::endl << bg::wkt(lp2) << std::endl;
             std::throw_with_nested(std::runtime_error(
@@ -923,17 +925,32 @@ bool Branching::vanpelt_new_branch(TNodePtr &branching_node, NodePtr &new_node,
 
         for (auto cone : neurite_->growth_cones_)
         {
-            weight = powf(2, -cone.second->get_centrifugal_order() * S_);
-            weights[cone.first] = weight;
-            total_weight += weight;
+            if (cone.second->get_branch()->size() > 1)
+            {
+                weight = powf(2, -cone.second->get_centrifugal_order() * S_);
+                weights[cone.first] = weight;
+                total_weight += weight;
+            }
+            else
+            {
+                weights[cone.first] = 0;
+            }
         }
+
+        if (total_weight == 0)
+        {
+            return false;
+        }
+
         double extracted = uniform_(*(rnd_engine).get()) * total_weight;
 
         total_weight = 0;
+
         for (auto cone : neurite_->growth_cones_)
         {
             total_weight += weights[cone.first];
             nex_vanpelt_cone = cone.second;
+
             if (total_weight >= extracted)
             {
                 break;
