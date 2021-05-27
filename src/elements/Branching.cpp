@@ -311,7 +311,7 @@ void Branching::update_splitting_cones(TNodePtr branching_cone,
         module = old_cone->cumul_dist_;
 
         // compute what would be the last points
-        BPoint old_pos = branch->xy_at(branch->size() - 1);
+        BPoint old_pos = branch->get_last_xy();
         BPoint l_vec = pos;
         bg::subtract_point(l_vec, old_pos);
 
@@ -330,6 +330,14 @@ void Branching::update_splitting_cones(TNodePtr branching_cone,
 
         BPoint r_vec(-radius * l_vec.y() * inv_norm,
                      radius * l_vec.x() * inv_norm);
+
+        if (std::isnan(r_vec.x()))
+        {
+            printf("nan rvec - %f - %f\n", inv_norm, radius);
+            std::cout << bg::wkt(l_vec) << std::endl << bg::wkt(pos)
+                      << std::endl << bg::wkt(old_pos)
+                      << std::endl << bg::wkt(r_vec) << std::endl;
+        }
 
         lp1 = BPoint(pos.x() + r_vec.x(), pos.y() + r_vec.y());
         lp2 = BPoint(pos.x() - r_vec.x(), pos.y() - r_vec.y());
