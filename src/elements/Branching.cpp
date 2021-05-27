@@ -319,7 +319,7 @@ void Branching::update_splitting_cones(TNodePtr branching_cone,
         double inv_norm =
             1. / sqrt(l_vec.x() * l_vec.x() + l_vec.y() * l_vec.y());
 
-        if (std::isnan(inv_norm))
+        if (std::isnan(inv_norm) or std::isinf(inv_norm))
         {
             printf("nan norm\n");
             std::cout << bg::wkt(l_vec) << std::endl << bg::wkt(pos)

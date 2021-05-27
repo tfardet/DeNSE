@@ -618,17 +618,17 @@ void GrowthCone::retraction(double distance, stype cone_n, int omp_id)
                 distance = 0.;
             }
         }
+    }
 
-        // set the new growth cone angle
-        move_.angle = old_angle_;
+    // set the new growth cone angle and position
+    move_.angle = old_angle_;
 
-        set_position(current_pos);
+    set_position(current_pos);
 
-        // prune growth cone if necessary
-        if (branch_->size() == 1)
-        {
-            prune(cone_n);
-        }
+    // prune growth cone if necessary
+    if (branch_->size() == 1)
+    {
+        prune(cone_n);
     }
 
     // check if we changed area
