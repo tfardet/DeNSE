@@ -905,9 +905,11 @@ void GrowthCone::make_move(const std::vector<double> &directions_weights,
                         catch (...)
                         {
                             printf("module %f - delta angle: %f - old angle %f "
-                                   "- new angle %f on OMP %i\n",
-                                   move_.module, delta_angle_, old_angle_,
-                                   new_angle, omp_id);
+                                   "- new angle %f after retraction %i on OMP "
+                                   "%i\n",
+                                   move_.module, delta_angle_*180/M_PI,
+                                   old_angle_*180/M_PI, new_angle*180/M_PI,
+                                   just_retracted_, omp_id);
 
                             BPoint p2 = branch_->get_last_xy();
 
