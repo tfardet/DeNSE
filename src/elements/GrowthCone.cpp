@@ -865,7 +865,7 @@ void GrowthCone::make_move(const std::vector<double> &directions_weights,
                     // this happens either if we cross the distance threshold
                     // of if it looks like the GC is about to turn too far
                     if (cumul_dist_ > threshold_ or
-                        std::abs(cumul_angle_) > 0.5*M_PI)
+                        std::abs(cumul_angle_) > 0.45*M_PI)
                     {
                         try
                         {
