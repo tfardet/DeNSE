@@ -208,9 +208,6 @@ bool Branching::branching_event(mtPtr rnd_engine, const Event &ev)
             success =
                 vanpelt_new_branch(branching_node, new_node, branching_point,
                                    rnd_engine, second_cone);
-#ifndef  NDEBUG
-            printf("VP: branching accomplished");
-#endif
 
         }
         catch (...)

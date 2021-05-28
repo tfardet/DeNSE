@@ -1123,8 +1123,6 @@ void generate_synapses_(
             xs = somas[source][0];
             ys = somas[source][1];
 
-            known_targets = interactions[source];
-
             if (ax[source].size() > 0)
             {
                 sp = ax[source][0];
@@ -1134,11 +1132,16 @@ void generate_synapses_(
                 {
                     targets.clear();
 
-                    for (stype n : postsyn_pop)
+                    if (interactions.find(source) != interactions.end())
                     {
-                        if (known_targets.find(n) != known_targets.end())
+                        known_targets = interactions[source];
+
+                        for (stype n : postsyn_pop)
                         {
-                            targets.push_back(n);
+                            if (known_targets.find(n) != known_targets.end())
+                            {
+                                targets.push_back(n);
+                            }
                         }
                     }
                 }
