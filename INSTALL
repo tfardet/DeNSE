@@ -28,7 +28,7 @@ Before installation, several tools must be pre-installed, including
 
 1. A set of software and libraries
     * CMake
-    * A C and C++11-compliant compiler such as GCC (4.8.1+)
+    * A C and C++14-compliant compiler such as GCC (6.1+)
     * Python (2.7 or 3.3+) and its header/development files
     * GEOS (3.5+) and its header/development files
     * Boost Geometry and Range (Boost 1.62 or higher)
@@ -241,6 +241,12 @@ First, you will need to install Anaconda: https://www.anaconda.com/download/.
 Once the installation is finished, launch Anaconda Navigator for the final
 installation steps, then, once it finishes, you can run the Anaconda Prompt from
 the startup menu.
+
+If you have Chocolatey installed on your computer, you can directly run
+
+   choco install openssl.light;
+   choco install miniconda3 --params="'/AddToPath:1'";
+   export PATH="/c/tools/miniconda3:/c/tools/miniconda3/Scripts:/c/tools/miniconda3/Library/bin:/c/tools/miniconda3/bin:$PATH";
 
 Make sure you have Visual Studio installed including Visual C++, otherwise get
 it from https://www.microsoft.com/en-us/download/developer-tools.aspx.

@@ -74,8 +74,10 @@ Branching::Branching(NeuritePtr neurite)
 {
     exponential_uniform_ =
         std::exponential_distribution<double>(uniform_branching_rate_);
+
     exponential_flpl_ =
         std::exponential_distribution<double>(flpl_branching_rate_);
+
     exponential_usplit_ =
         std::exponential_distribution<double>(uniform_split_rate_);
 }
@@ -101,17 +103,15 @@ void Branching::initialize_next_event(mtPtr rnd_engine)
     {
         compute_uniform_event(rnd_engine);
     }
+
     if (use_flpl_branching_ and next_flpl_event_ == invalid_ev)
     {
         compute_flpl_event(rnd_engine);
     }
+
     if (use_uniform_split_ and next_usplit_event_ == invalid_ev)
     {
         compute_usplit_event(rnd_engine);
-    }
-    if (use_van_pelt_ and next_vanpelt_event_ == invalid_ev)
-    {
-        compute_vanpelt_event(rnd_engine);
     }
 }
 
@@ -123,7 +123,7 @@ void Branching::initialize_next_event(mtPtr rnd_engine)
 void Branching::set_branching_event(Event &ev, signed char ev_type,
                                     double duration)
 {
-    Time ev_time = kernel().simulation_manager.get_time();
+    Time ev_time = kernel().simulation_manager->get_time();
 
     // separate duration into days, hours, minutes, seconds
     double total_hours = std::floor(duration / 60.);
@@ -160,16 +160,22 @@ void Branching::set_branching_event(Event &ev, signed char ev_type,
  */
 bool Branching::branching_event(mtPtr rnd_engine, const Event &ev)
 {
-    // uniform_branching_event
+    // Time-based events have GC ID < 0
+    // Branching node will be chosen algorithmically
+    bool van_pelt_occurence = std::get<edata::GC>(ev) == -2;
+
     bool uniform_occurence =
         std::get<edata::TIME>(next_uniform_event_) == std::get<edata::TIME>(ev);
+
     bool flpl_occurence =
         std::get<edata::TIME>(next_flpl_event_) == std::get<edata::TIME>(ev);
+
     bool usplit_occurence =
         std::get<edata::TIME>(next_usplit_event_) == std::get<edata::TIME>(ev);
-    bool van_pelt_occurence =
-        std::get<edata::TIME>(next_vanpelt_event_) == std::get<edata::TIME>(ev);
-    bool res_occurence = std::get<edata::GC>(ev) != -1;
+
+    // Resource-based splits are provided by the growth-cones themselves and are
+    // thus discriminated on the basis of the gc_id
+    bool res_occurence = std::get<edata::GC>(ev) > -1;
 
     // prepare pointers to nodes and branching_point
     TNodePtr branching_node(nullptr);
@@ -192,6 +198,26 @@ bool Branching::branching_event(mtPtr rnd_engine, const Event &ev)
             std::throw_with_nested(std::runtime_error(
                 "Passed from `Branching::branching_event` during "
                 "resource-based split."));
+        }
+    }
+    // verify vanpelt event
+    else if (use_van_pelt_ and van_pelt_occurence)
+    {
+        try
+        {
+            success =
+                vanpelt_new_branch(branching_node, new_node, branching_point,
+                                   rnd_engine, second_cone);
+#ifndef  NDEBUG
+            printf("VP: branching accomplished");
+#endif
+
+        }
+        catch (...)
+        {
+            std::throw_with_nested(std::runtime_error(
+                "Passed from `Branching::branching_event` during "
+                "van Pelt split."));
         }
     }
     // check uniform event
@@ -240,22 +266,6 @@ bool Branching::branching_event(mtPtr rnd_engine, const Event &ev)
                 "uniform split."));
         }
     }
-    // verify vanpelt event
-    else if (use_van_pelt_ and van_pelt_occurence)
-    {
-        try
-        {
-            success =
-                vanpelt_new_branch(branching_node, new_node, branching_point,
-                                   rnd_engine, second_cone);
-        }
-        catch (...)
-        {
-            std::throw_with_nested(std::runtime_error(
-                "Passed from `Branching::branching_event` during "
-                "van Pelt split."));
-        }
-    }
 
     if (success)
     {
@@ -289,45 +299,82 @@ void Branching::update_splitting_cones(TNodePtr branching_cone,
     GCPtr old_cone   = std::dynamic_pointer_cast<GrowthCone>(branching_cone);
     BranchPtr branch = new_node->get_branch();
 
-    // to prevent overlap between the two second_cones, we put them on the two
-    // corners (last points) of the branch
-    std::pair<BPoint, BPoint> lps = branch->get_last_points();
-    double new_angle              = second_cone->get_state("angle");
-    double module                 = branch->get_last_segment_length();
-
-    BPoint lp1(lps.first), lp2(lps.second);
+    // to prevent overlap between the two second_cones, we put them in between
+    // the previous position and the two corners (last points) of the branch
+    double new_angle(second_cone->get_state("angle")), module;
     BPoint pos = second_cone->get_position();
+
+    BPoint lp1, lp2;
+
+    if (old_cone->cumul_dist_ > 0)
+    {
+        module = old_cone->cumul_dist_;
+
+        // compute what would be the last points
+        BPoint old_pos = branch->xy_at(branch->size() - 1);
+        BPoint l_vec = pos;
+        bg::subtract_point(l_vec, old_pos);
+
+        // orthogonal vector
+        double inv_norm =
+            1. / sqrt(l_vec.x() * l_vec.x() + l_vec.y() * l_vec.y());
+
+        double radius = 0.5*old_cone->get_diameter();
+
+        BPoint r_vec(-radius * l_vec.y() * inv_norm,
+                     radius * l_vec.x() * inv_norm);
+
+        lp1 = BPoint(pos.x() + r_vec.x(), pos.y() + r_vec.y());
+        lp2 = BPoint(pos.x() - r_vec.x(), pos.y() - r_vec.y());
+    }
+    else
+    {
+        std::pair<BPoint, BPoint> lps = branch->get_last_points();
+
+        module = branch->get_last_segment_length();
+
+        lp1 = lps.first;
+        lp2 = lps.second;
+    }
+
     BPoint tmp = BPoint(pos.x() + module * cos(new_angle),
                         pos.y() + module * sin(new_angle));
 
     double d1(bg::distance(tmp, lp1)), d2(bg::distance(tmp, lp2));
-    BPoint pos1 = BPoint(0.5 * (pos.x() + lp1.x()), 0.5 * (pos.y() + lp1.y()));
-    BPoint pos2 = BPoint(0.5 * (pos.x() + lp2.x()), 0.5 * (pos.y() + lp2.y()));
+    BPoint pos1 = BPoint(0.5 * (pos.x() + lp1.x()),
+                         0.5 * (pos.y() + lp1.y()));
+
+    BPoint pos2 = BPoint(0.5 * (pos.x() + lp2.x()),
+                         0.5 * (pos.y() + lp2.y()));
 
     if (d2 > d1)
     {
         std::swap(pos1, pos2);
     }
 
-    // make the two cones start from the parent position and end on lp1/lp2
     int omp_id = kernel().parallelism_manager.get_thread_local_id();
 
-    // remove last point (previous position) from old branch
-    BPolygonPtr last_seg = branch->get_last_segment();
-    branch->retract();
-    new_node->set_position(branch->get_last_xy());
-
-    if (last_seg != nullptr)
+    // remove last segment (if it was added)
+    if (old_cone->cumul_dist_ > 0)
     {
-        BBox box;
-        bg::envelope(*(last_seg.get()), box);
+        // remove last point (previous position) from old branch
+        BPolygonPtr last_seg = branch->get_last_segment();
+        branch->retract();
+        new_node->set_position(branch->get_last_xy());
 
-        // the last segment is initial size - 2 i.e. new size - 1
-        ObjectInfo info = std::make_tuple(
-            neurite_->get_parent_neuron().lock()->get_gid(),
-            neurite_->get_name(), new_node->get_node_id(), branch->size() - 1);
+        if (last_seg != nullptr)
+        {
+            BBox box;
+            bg::envelope(*(last_seg.get()), box);
 
-        kernel().space_manager.remove_object(box, info, omp_id);
+            // the last segment is initial size - 2 i.e. new size - 1
+            ObjectInfo info = std::make_tuple(
+                neurite_->get_parent_neuron().lock()->get_gid(),
+                neurite_->get_name(), new_node->get_node_id(),
+                branch->size() - 1);
+
+            kernel().space_manager.remove_object(box, info, omp_id);
+        }
     }
 
     tmp          = branch->get_last_xy();
@@ -356,7 +403,8 @@ void Branching::update_splitting_cones(TNodePtr branching_cone,
         catch (...)
         {
             std::throw_with_nested(std::runtime_error(
-                "Passed from `Branching::update_splitting_cones`."));
+                "Passed from `Branching::update_splitting_cones` "
+                "(second cone)."));
         }
     }
 
@@ -380,7 +428,8 @@ void Branching::update_splitting_cones(TNodePtr branching_cone,
         catch (...)
         {
             std::throw_with_nested(std::runtime_error(
-                "Passed from `Branching::update_splitting_cones`."));
+                "Passed from `Branching::update_splitting_cones` "
+                "(branching cone)."));
         }
     }
 }
@@ -415,7 +464,7 @@ void Branching::compute_uniform_event(mtPtr rnd_engine)
                             duration);
 
         // send it to the simulation and recorder managers
-        kernel().simulation_manager.new_branching_event(next_uniform_event_);
+        kernel().simulation_manager->new_branching_event(next_uniform_event_);
     }
 }
 
@@ -569,7 +618,7 @@ void Branching::compute_flpl_event(mtPtr rnd_engine)
                             duration);
 
         // send it to the simulation and recorder managers
-        kernel().simulation_manager.new_branching_event(next_flpl_event_);
+        kernel().simulation_manager->new_branching_event(next_flpl_event_);
     }
 }
 
@@ -808,7 +857,7 @@ void Branching::compute_usplit_event(mtPtr rnd_engine)
         set_branching_event(next_usplit_event_, names::gc_splitting, duration);
 
         // send it to the simulation and recorder managers
-        kernel().simulation_manager.new_branching_event(next_usplit_event_);
+        kernel().simulation_manager->new_branching_event(next_usplit_event_);
     }
 }
 
@@ -818,56 +867,36 @@ void Branching::compute_usplit_event(mtPtr rnd_engine)
 //###################################################
 
 /**
- * @brief Compute the next vanpelt branching event
- * @details
- * The time of branching is computed with the statistical branching algorithm
- * from Van Pelt
- * (see article for details) the relevant parameters are B, E, T
- * The growth cone who is going to branch is computed with a reservoir
- * sample algorithm; the weight are defined in the Van Pelt model and
- * the model parameter S is set in the Branching::set_status
+ * @brief Checks occurrence of van Pelt branching event.
  *
- * This distribution is verified to reproduce the Van Pelt results.
+ * This function computes the branching probability based on the BEST model,
+ * according to the formula: ::
  *
- * @param rnd_engine
+ *     p = \frac{B}{T} N^{-E} e^{-t / T} \int_0^{\Delta t} e^{-u / T} du
  */
-void Branching::compute_vanpelt_event(mtPtr rnd_engine)
+bool Branching::van_pelt_branching_occurence(mtPtr rnd_engine, double substep)
 {
-    if (not neurite_->growth_cones_.empty())
+    double t_0 = kernel().simulation_manager->get_current_minutes() + substep;
+
+    double dt_exp = -std::expm1(-substep / T_);
+
+    stype num_gcs = neurite_->growth_cones_.size() +
+                    neurite_->growth_cones_inactive_.size();
+
+    double p = B_ * pow(num_gcs, -E_) * exp(-t_0 / T_) * dt_exp;
+
+    if (p*num_gcs > uniform_(*(rnd_engine).get()))
     {
-        // get the current second to compute the time-dependent
-        // exponential decreasing probability of having a branch.
-        double t_0    = kernel().simulation_manager.get_current_minutes();
-        stype num_gcs = neurite_->growth_cones_.size() +
-                        neurite_->growth_cones_inactive_.size();
-
-        double delta = exp((t_0 + 1) / T_) * T_ / B_ * powf(num_gcs, E_);
-
-        //-t_0 - log(exp(-T_ * t_0) -
-        // powf(neurite_->growth_cones_.size(), E_ - 1) / B_) /T_;
-        exponential_ = std::exponential_distribution<double>(1. / delta);
-
-        double duration = exponential_(*(rnd_engine).get());
-
-        if (duration > std::numeric_limits<stype>::max())
-        {
-            next_vanpelt_event_ = invalid_ev;
-        }
-        else
-        {
-            set_branching_event(next_vanpelt_event_, names::gc_splitting,
-                                duration);
-
-            // send it to the simulation and recorder managers
-            kernel().simulation_manager.new_branching_event(
-                next_vanpelt_event_);
-        }
+        return true;
     }
+
+    return false;
 }
 
 
 /**
  * @brief Compute the Van Pelt normalization factor and update GrowthCones
+ * 
  * This function will be run every time a branching happen if the
  * 'use_van_pelt' flag is set True.
  * This function implement the branchin throught
@@ -912,25 +941,22 @@ bool Branching::vanpelt_new_branch(TNodePtr &branching_node, NodePtr &new_node,
         branching_node  = nex_vanpelt_cone;
         branching_point = branching_node->get_branch()->size() - 1;
 
-        //@TODO define new legth for van pelt
+        // initial length is zero since the GC splits at the beginning of a step
         double new_length = 0.;
+
         double new_angle, old_angle;
         double old_diameter = nex_vanpelt_cone->get_diameter();
         double new_diameter = old_diameter;
 
         neurite_->gc_split_angles_diameter(rnd_engine, new_angle, old_angle,
                                            new_diameter, old_diameter);
+
         bool success = neurite_->growth_cone_split(
             nex_vanpelt_cone, new_length, new_angle, old_angle, new_diameter,
             old_diameter, new_node, second_cone);
 
-        next_vanpelt_event_ = invalid_ev;
-        compute_vanpelt_event(rnd_engine);
-
         return success;
     }
-
-    next_vanpelt_event_ = invalid_ev;
 
     return false;
 }
@@ -1096,7 +1122,7 @@ void Branching::get_status(statusMap &status) const
     set_param(status, names::use_van_pelt, use_van_pelt_, "");
     if (use_van_pelt_)
     {
-        set_param(status, names::B, B_, "count / minute");
+        set_param(status, names::B, B_, "");
         set_param(status, names::E, E_, "");
         set_param(status, names::S, S_, "");
         set_param(status, names::T, T_, "minute");

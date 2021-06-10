@@ -54,9 +54,10 @@ copt =  {
         '/openmp', '/Od', '/fp:precise', '/permissive-', '/Zc:twoPhase-',
         '/MDd' if "@CMAKE_BUILD_TYPE@" == "Debug" else "/MD", "-Zi", "/Ox",
         '/D_ITERATOR_DEBUG_LEVEL=2' if "@CMAKE_BUILD_TYPE@" == "Debug" else "",
+        '/std:c++14',
     ],
     'unix': [
-        '-std=c++11', '-Wno-cpp', '-Wno-unused-function', '-fopenmp',
+        '-std=c++14', '-Wno-cpp', '-Wno-unused-function', '-fopenmp',
         '-ffast-math', '-msse', '-ftree-vectorize', '-O2', '-g', "-fPIC",
     ],
 }
@@ -158,7 +159,7 @@ setup(
         exclude=['dist', '_*', 'build', '*.egg-info']),
 
     # Include the non python files (c++ library):
-    package_data = {mod_name: ['*.so', '*.dll', '*.a', '*.dylib', '*.pxd']},
+    package_data = {mod_name: ['*.so', '*.dll', '*.pyd', '*.a', '*.dylib', '*.pxd']},
 	include_package_data=False,
 
     ext_modules = extensions,

@@ -1,5 +1,4 @@
 # Python
-
 *.pyc
 *.pyxbldc
 *.egg.info
@@ -59,6 +58,7 @@ docs/modules/examples
 
 *.pdf
 *.swc
+*.nml
 *.json
 src/pymodule/dense/rw_in_env/ve
 src/pymodule/dense/ve

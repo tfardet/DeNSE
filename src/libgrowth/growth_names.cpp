@@ -57,7 +57,6 @@ const std::string
 const std::string
     affinity_dendrite_soma_same_neuron("affinity_dendrite_soma_same_neuron");
 const std::string axon_angle("axon_angle");
-const std::string axon_diameter("axon_diameter");
 const std::string axon_polarization_weight("axon_polarization_weight");
 
 const std::string B("B");
@@ -65,9 +64,7 @@ const std::string branching_proba_default("branching_proba_default");
 
 const std::string critical_pull("critical_pull");
 
-const std::string memory_decay_factor("memory_decay_factor");
 const std::string dendrite_angles("dendrite_angles");
-const std::string dendrite_diameter("dendrite_diameter");
 const std::string description("description");
 const std::string diameter_eta_exp("diameter_eta_exp");
 const std::string diameter_fraction_lb("diameter_fraction_lb");
@@ -91,6 +88,7 @@ const std::string growth_cone_model("growth_cone_model");
 const std::string has_axon("has_axon");
 
 const std::string initial_branch_lenght("initial_branch_lenght");
+const std::string initial_diameter("initial_diameter");
 const std::string interactions("interactions");
 
 const std::string lateral_branching_angle_mean("lateral_branching_angle_mean");
@@ -101,6 +99,9 @@ const std::string max_arbor_length("max_arbor_length");
 const std::string max_gc_number("max_gc_number");
 const std::string max_sensing_angle("max_sensing_angle");
 const std::string max_synaptic_distance("max_synaptic_distance");
+const std::string memory_dist_cut("memory_dist_cut");
+const std::string memory_dist_exp("memory_dist_exp");
+const std::string memory_influence("memory_influence");
 const std::string min_branching_distance("min_branching_distance");
 
 const std::string neurite_angles("neurite_angles");
@@ -113,6 +114,7 @@ const std::string num_growth_cones("num_growth_cones");
 const std::string persistence_length("persistence_length");
 const std::string points_per_circle("points_per_circle");
 const std::string polarization_strength("polarization_strength");
+const std::string print_time("print_progress");
 const std::string proba_down_move("proba_down_move");
 const std::string proba_retraction("retraction_probability");
 

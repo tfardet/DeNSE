@@ -105,7 +105,7 @@ void ParallelismManager::set_num_local_threads(int n_threads)
     // call first space_manager, then simulation manager, then neuron_manager,
     // then record_manager
     kernel().space_manager.num_threads_changed(n_threads);
-    kernel().simulation_manager.num_threads_changed(n_threads);
+    kernel().simulation_manager->num_threads_changed(n_threads);
     kernel().neuron_manager.init_neurons_on_thread(n_threads);
     kernel().record_manager.num_threads_changed(n_threads);
 
@@ -189,9 +189,9 @@ void ParallelismManager::set_status(const statusMap &status)
 
 void ParallelismManager::get_status(statusMap &status) const
 {
-    set_param(status, "num_mpi_processes", num_mpi_, "");
+    // set_param(status, "num_mpi_processes", num_mpi_, "");
+    // set_param(status, "num_virtual_processes", num_omp_ * num_mpi_, "");
     set_param(status, "num_local_threads", num_omp_, "");
-    set_param(status, "num_virtual_processes", num_omp_ * num_mpi_, "");
 }
 
 } // namespace growth

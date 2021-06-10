@@ -44,19 +44,6 @@
 namespace growth
 {
 
-typedef struct NeuronDetails
-{
-    double soma_radius;
-    double dendrite_diameter;
-    double axon_diameter;
-    NeuronDetails()
-        : soma_radius(SOMA_RADIUS)
-        , dendrite_diameter(DENDRITE_DIAMETER)
-        , axon_diameter(AXON_DIAMETER)
-    {
-    }
-} NeuronDetails;
-
 
 /*
  *  Friend classes forward declaration
@@ -129,6 +116,7 @@ class Neuron : public std::enable_shared_from_this<Neuron>
     void get_neurite_status(statusMap &status, std::string neurite_type,
                             const std::string &level);
     void update_kernel_variables();
+    void update_angles(const std::unordered_map<std::string, double> &angles);
 
     bool has_axon() const;
 
@@ -152,8 +140,7 @@ class Neuron : public std::enable_shared_from_this<Neuron>
     NeuriteMap neurites_;
     BaseNodePtr soma_;
     bool has_axon_;
-    //! Center of mass of the neuron's soma
-    NeuronDetails details;
+    double soma_radius_;
     // obserables for recorders
     std::vector<std::string> observables_;
     // Actin waves
