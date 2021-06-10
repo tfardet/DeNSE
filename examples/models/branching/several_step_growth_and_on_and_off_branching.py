@@ -34,7 +34,7 @@ from dense.units import *
 # Neuron parameters defines the general properties of the neuron
 # Growth_models parameters defined at the neuron level are applied
 # to all the neurites (dendrites and axon)
-#
+
 neuron_params = {
     # initial neurite shape parameters
     "dendrite_diameter": 2.*um,

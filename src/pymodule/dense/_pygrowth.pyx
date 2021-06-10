@@ -413,7 +413,6 @@ def create_neurites(neurons, num_neurites=1, params=None, angles=None,
                         warnings.warn(message, category=RuntimeWarning)
                         warnings.simplefilter('default', RuntimeWarning)
 
-
                     assert b"axon" not in list(neurites), \
                         ("To create a neurite called 'axon', the neurons have "
                          "their `has_axon` parameter to True, and  should not "
