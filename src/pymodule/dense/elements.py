@@ -1030,9 +1030,11 @@ class Population(list):
 
     def __getitem__(self, key):
         if isinstance(key, slice):
-            pop = Population(name="subpop_" + self.name)
-
-            for i in range(self._idx[key.start], self._idx[key.stop]):
+            pop   = Population(name="subpop_" + self.name)
+            start = 0 if key.start is None else key.start
+            stop  = len(self) - 1 if key.stop is None else key.stop
+            step  = 1 if key.step is None else key.step
+            for i in range(start, stop, step):
                 super(Population, pop).append(
                     super(Population, self).__getitem__(i))
 

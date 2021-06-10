@@ -476,6 +476,8 @@ def is_iterable(obj):
 
 
 def neuron_param_parser(param, culture, n, on_area=None, rnd_pos=True):
+    import dense as ds
+
     if culture is None:
         if rnd_pos:
             param["position"] = [(0., 0.) for _ in range(n)]*um
@@ -491,7 +493,8 @@ def neuron_param_parser(param, culture, n, on_area=None, rnd_pos=True):
                 areas     = [culture.areas[name] for name in on_area]
                 container = cascaded_union(areas)
 
-        sradius = 0.
+        sradius = ds.get_default_properties("neuron", "soma_radius")
+
         if "soma_radius" in param:
             if nonstring_container(param["soma_radius"]):
                 sradius = np.max(param["soma_radius"])

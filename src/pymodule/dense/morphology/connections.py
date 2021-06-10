@@ -133,13 +133,18 @@ def generate_network(source_neurons=None, target_neurons=None,
 
     if source_neurons is None:
         source_neurons = _pg.get_neurons(as_ints=True)
+    else:
+        source_neurons = [int(i) for i in source_neurons]
 
     if target_neurons is None:
         target_neurons = _pg.get_neurons(as_ints=True)
+    else:
+        target_neurons = [int(i) for i in target_neurons]
 
     if edges is None:
         edges, positions, distances = get_connections(
-            source_neurons=source_neurons, target_neurons=target_neurons,
+            source_neurons=source_neurons,
+            target_neurons=target_neurons,
             method=method, spine_density=spine_density,
             connection_probability=connection_probability,
             only_new_connections=only_new_connections,
@@ -162,8 +167,8 @@ def generate_network(source_neurons=None, target_neurons=None,
 
     # test if there is a network to create
     if not neurons and shape is None:
-        raise RuntimeError('Cannot create a network without any neurons '
-                           'or environment.')
+        raise RuntimeError('Cannot create a network without any '
+                           'neurons or environment.')
 
     network = NetClass(population=population, shape=shape,
                        positions=positions, multigraph=multigraph)

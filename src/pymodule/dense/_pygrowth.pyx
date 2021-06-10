@@ -240,6 +240,7 @@ def create_neurons(n=1, params=None, num_neurites=0, neurite_params=None,
 
     if env_required:
         culture = environment if culture is None else culture
+
     if culture is None:
         assert env_required is False, \
             "Environment is required but culture was not initialized. " + \
@@ -262,6 +263,7 @@ def create_neurons(n=1, params=None, num_neurites=0, neurite_params=None,
 
     # seed neurons on random positions or get position from `params`?
     rnd_pos = kwargs.get("rnd_pos", False)
+
     if "position" not in params:
         rnd_pos = True
 
