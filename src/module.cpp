@@ -389,18 +389,27 @@ void set_status_(std::vector<stype> gids, std::vector<statusMap> status,
 
         if (it != map_thread_gids.end())
         {
-            for (i=0; i < map_thread_gids[omp_id].size(); i++)
+            auto map_gids = map_thread_gids[omp_id];
+            auto map_ids = map_thread_idx[omp_id];
+
+            stype gid, idx;
+
+            for (stype k=0; k < map_gids.size(); k++)
             {
-                auto neuron = kernel().neuron_manager.get_neuron(gids[i]);
-                neuron->set_status(status[i]);
+                idx = map_ids[k];
+                gid = map_gids[k];
+
+                auto neuron = kernel().neuron_manager.get_neuron(gid);
+
+                neuron->set_status(status[idx]);
 
                 statusMap local_params;
 
                 for (auto entry : neurite_statuses)
                 {
-                    local_params = status[i];
+                    local_params = status[idx];
 
-                    for (auto &param : entry.second[i])
+                    for (auto &param : entry.second[idx])
                     {
                         local_params[param.first] = param.second;
                     }
@@ -408,16 +417,14 @@ void set_status_(std::vector<stype> gids, std::vector<statusMap> status,
                     // check for placeholder "dendrites" entry
                     if (entry.first == "dendrites")
                     {
-                        for (auto neurite : get_neurites_(gids[i]))
+                        for (auto neurite : get_neurites_(gid))
                         {
-                            neuron->set_neurite_status(neurite,
-                                                       local_params);
+                            neuron->set_neurite_status(neurite, local_params);
                         }
                     }
                     else
                     {
-                        neuron->set_neurite_status(entry.first,
-                                                   local_params);
+                        neuron->set_neurite_status(entry.first, local_params);
                     }
                 }
             }

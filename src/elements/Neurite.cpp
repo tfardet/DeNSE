@@ -1325,19 +1325,25 @@ void Neurite::set_status(const statusMap &status)
     }
 
     double sd_std(diameter_ratio_std_), sd_avg(diameter_ratio_avg_);
+
     get_param(status, names::diameter_ratio_std, sd_std);
+
     if (sd_std < 0)
     {
         throw InvalidArg("`diameter_ratio_std` must be positive.", __FUNCTION__,
                          __FILE__, __LINE__);
     }
+
     diameter_ratio_std_ = sd_std;
+
     get_param(status, names::diameter_ratio_avg, sd_avg);
+
     if (sd_avg < 0)
     {
         throw InvalidArg("`diameter_ratio_avg` must be positive.", __FUNCTION__,
                          __FILE__, __LINE__);
     }
+
     diameter_ratio_avg_ = sd_avg;
 
     get_param(status, names::lateral_branching_angle_mean,

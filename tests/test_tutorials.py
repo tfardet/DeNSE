@@ -43,7 +43,7 @@ def mock_show():
     pass
 
 
-def test_1_first_steps(monkeypatch):
+def test_first_steps(monkeypatch):
     '''
     Run first example.
     '''
@@ -52,7 +52,7 @@ def test_1_first_steps(monkeypatch):
     exec(open(tuto + "/1_first-steps.py").read())
 
 
-def test_2_interacting_neurons(monkeypatch):
+def test_interacting_neurons(monkeypatch):
     '''
     Run second example.
     '''
@@ -61,7 +61,7 @@ def test_2_interacting_neurons(monkeypatch):
     exec(open(tuto + "/2_interacting-neurons.py").read())
 
 
-def test_3_space_embedded_neurons(monkeypatch):
+def test_space_embedded_neurons(monkeypatch):
     '''
     Run second example.
     '''
@@ -85,7 +85,7 @@ if __name__ == "__main__":
 
     mp = mptch()
 
-    test_1_first_steps(mp)
-    test_2_interacting_neurons(mp)
-    test_3_space_embedded_neurons(mp)
+    test_first_steps(mp)
+    test_interacting_neurons(mp)
+    test_space_embedded_neurons(mp)
     test_named_neurites()

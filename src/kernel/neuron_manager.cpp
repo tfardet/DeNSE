@@ -418,7 +418,10 @@ void NeuronManager::register_model(std::string model_name, GCPtr model_ptr)
 
 void NeuronManager::set_max_resol(stype neuron, double max_resol)
 {
-    max_resolutions_[thread_of_neuron_[neuron]][neuron] = max_resol;
+    #pragma omp critical
+    {
+        max_resolutions_[thread_of_neuron_[neuron]][neuron] = max_resol;
+    }
 }
 
 

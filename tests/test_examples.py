@@ -108,14 +108,6 @@ def test_7_several_step_growth(monkeypatch):
               "/several_step_growth_and_on_and_off_branching.py").read())
 
 
-def test_named_neurites():
-    '''
-    Run second example.
-    '''
-    ds.reset_kernel()
-    exec(open(tuto + "/named_neurites.py").read())
-
-
 if __name__ == "__main__":
     class mptch:
         def setattr(*args):
@@ -130,4 +122,3 @@ if __name__ == "__main__":
     test_5_pyramidal(mp)
     test_6_starbust_amacrine_cell(mp)
     test_7_several_step_growth(mp)
-    test_named_neurites()

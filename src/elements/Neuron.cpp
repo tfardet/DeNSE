@@ -710,6 +710,7 @@ void Neuron::set_status(const statusMap &status)
     bool sim_started  = (kernel().simulation_manager->get_time() != Time());
 
     bsr = get_param(status, names::soma_radius, sr);
+
     if (bsr and sr != soma_radius_)
     {
         if (has_neurites)
@@ -727,7 +728,9 @@ void Neuron::set_status(const statusMap &status)
 
     //@TODO change the growth cone_model during the growth
     std::string gc_model;
+
     bool gc_change = get_param(status, names::growth_cone_model, gc_model);
+
     if (gc_change and gc_model != growth_cone_model_)
     {
         if (has_neurites)
@@ -749,8 +752,10 @@ void Neuron::set_status(const statusMap &status)
               axon_polarization_weight_);
 
     auto nit = neurites_.find("axon");
-    baa      = get_param(status, names::axon_angle, aa);
+
+    baa  = get_param(status, names::axon_angle, aa);
     baa *= (aa != axon_angle_);
+
     if (baa)
     {
         if (nit != neurites_.end())
@@ -768,6 +773,7 @@ void Neuron::set_status(const statusMap &status)
     }
 
     auto it = status.find("x");
+
     if (it != status.end())
     {
         double x, y;

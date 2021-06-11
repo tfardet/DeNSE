@@ -972,8 +972,6 @@ void GrowthCone::init_filopodia()
 {
     double dtheta, std_norm, proba_norm, bin, angle, P;
 
-    double resol = kernel().simulation_manager->get_resolution();
-
     // move sensing angle must have been updated by previous call to
     // update_growth_properties
     num_filopodia_ = min_filopodia_;
@@ -1007,7 +1005,6 @@ void GrowthCone::set_angle(double angle) { move_.angle = angle; }
 
 void GrowthCone::set_status(const statusMap &status)
 {
-
     get_param(status, names::filopodia_wall_affinity, filopodia_.wall_affinity);
     get_param(status, names::scale_up_move, scale_up_move_);
     get_param(status, names::filopodia_min_number, min_filopodia_);
@@ -1032,10 +1029,15 @@ void GrowthCone::set_status(const statusMap &status)
             "relevant behaviors.");
     }
 
-    get_param(status, names::proba_retraction, proba_retraction_);
+    double old_proba(proba_retraction_);
 
-    // update exponential distribution
-    exponential_ = std::exponential_distribution<double>(proba_retraction_);
+    bool pset = get_param(status, names::proba_retraction, proba_retraction_);
+
+    if (pset and proba_retraction_ != old_proba)
+    {
+        // update exponential distribution
+        exponential_ = std::exponential_distribution<double>(proba_retraction_);
+    }
 
     get_param(status, names::duration_retraction, duration_retraction_);
     get_param(status, names::speed_ratio_retraction, speed_ratio_retraction_);

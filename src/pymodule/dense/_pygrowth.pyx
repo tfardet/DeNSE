@@ -1489,7 +1489,7 @@ def set_object_properties(objects, params=None, neurite_params=None):
                        else neurite_params.copy()
 
     cdef:
-        stype i, n       = len(objects)
+        stype i, n = len(objects)
         vector[stype] gids = [int(obj) for obj in objects]
         statusMap base_neuron_status
         unordered_map[string, statusMap] base_neurite_statuses
@@ -1506,8 +1506,7 @@ def set_object_properties(objects, params=None, neurite_params=None):
             def_model = params.get("growth_cone_model", "default")
 
             if neurite_params:
-                dod = isinstance(next(iter(neurite_params.values())),
-                                 dict)
+                dod = isinstance(next(iter(neurite_params.values())), dict)
 
                 stat = neurite_params
 

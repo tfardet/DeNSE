@@ -36,17 +36,9 @@ from dense.units import *
 # to all the neurites (dendrites and axon)
 
 neuron_params = {
-    # initial neurite shape parameters
-    "dendrite_diameter": 2.*um,
-    "axon_diameter": 1.*um,
-
-neuron_params = {
-    # soma position
-    # "position": np.random.uniform(-1000, 1000, (num_neurons, 2))*um,
-
-    # axon versus dendrites orientations
-    "polarization_strength": 20.,
-    # "neurite_angles": {"axon": 90.*deg, "dendrite_1": 210.*deg, "dendrite_2": 310.*deg},
+    "neurite_angles": {"axon": 90.*deg, "dendrite_1": 210.*deg, "dendrite_2": 310.*deg},
+    "affinity_dendrite_self": -1000.,
+    "affinity_axon_self": -1000.,
 }
 
 axon_params = {
@@ -99,7 +91,8 @@ if __name__ == '__main__':
         "seeds": [33],
         "num_local_threads": 1,
         "resolution": 30.*minute,
-        "environment_required": False
+        "environment_required": False,
+        # ~ "interactions": False
     }
 
     ds.set_kernel_status(kernel)
@@ -139,23 +132,23 @@ if __name__ == '__main__':
     vp_axon = {
         # branching choice and parameters
         "use_van_pelt": True,
-        "gc_split_angle_mean": 30.*deg,
+        "gc_split_angle_mean": 60.*deg,
         "gc_split_angle_std": 5.*deg,
-        "B": 100.,
-        "E": 0.1,
-        "S": 1.5, # large S leads to core dump
-        "T": 7*day,
+        "B": 3.,
+        "E": 0.75,
+        "S": 0.5, # large S leads to core dump
+        "T": 14*day,
     }
 
     vp_dend = {
         # branching choice and parameters
         "use_van_pelt": True,
-        "gc_split_angle_mean": 30.*deg,
-        "gc_split_angle_std": 5.*deg,
-        "B": 20.,
-        "E": 0.1,
-        "S": 1.5, # large S leads to core dump
-        "T": 7*day,
+        "gc_split_angle_mean": 60.*deg,
+        "gc_spit_angle_std": 5.*deg,
+        "B": 5.,
+        "E": 0.75,
+        "S": 0.5, # large S leads to core dump
+        "T": 14*day,
     }
 
     neurite_params = {"axon": vp_axon, "dendrites": vp_dend}
@@ -163,7 +156,7 @@ if __name__ == '__main__':
     # update the parameters lists of the neurons 'gids'
     ds.set_object_properties(gids, neurite_params=neurite_params)
 
-    ds.simulate(7 *day+2*day)
+    ds.simulate(7 *day + 17*day)
 
     print("Simulation time : {}".format(dense.get_kernel_status('time')))
     ds.plot.plot_neurons(mode="mixed", show=True)
