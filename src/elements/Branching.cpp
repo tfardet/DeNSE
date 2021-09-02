@@ -417,8 +417,9 @@ void Branching::update_splitting_cones(TNodePtr branching_cone,
             printf("error adding point - %f - %lu\n", old_cone->cumul_dist_,
                    branch->size());
 
-            std::cout << bg::wkt(tmp) << std::endl << bg::wkt(pos2) << std::endl;
-            std::cout << bg::wkt(lp1) << std::endl << bg::wkt(lp2) << std::endl;
+            std::cout << bg::wkt(tmp) << std::endl << bg::wkt(pos2) << std::endl
+                      << bg::wkt(lp1) << std::endl << bg::wkt(lp2) << std::endl;
+
             std::throw_with_nested(std::runtime_error(
                 "Passed from `Branching::update_splitting_cones` "
                 "(second cone)."));

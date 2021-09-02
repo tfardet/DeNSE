@@ -67,6 +67,17 @@ bool allnan(const std::vector<double> &weights)
 }
 
 
+/*
+ * Difference between two angles. Returns a signed result in [-pi, pi]
+ */
+double anglediff(a1, a2)
+{
+    double da = (a1 - a2) + M_PI;
+
+    return da - std::floor(da / (2*M_PI)) * 2*M_PI - M_PI;
+}
+
+
 GrowthCone::GrowthCone(const std::string &model)
     : TopologicalNode()
     , neuron_id_(0)
@@ -858,8 +869,8 @@ void GrowthCone::make_move(const std::vector<double> &directions_weights,
                     delta_angle_ = new_angle - move_.angle;
                     move_.angle  = new_angle;
 
-                    cumul_dist_ += move_.module;
-                    cumul_angle_ += delta_angle_;
+                    cumul_dist_ = bg::distance(p, position_);
+                    cumul_angle_ = new_angle - old_angle_;
 
                     // send the new segment to the space manager
                     // this happens either if we cross the distance threshold
